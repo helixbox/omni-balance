@@ -17,13 +17,14 @@ Omni Balance is an intelligent liquidity management tool designed to achieve sea
 
 #### Supported Providers
 
-| name                                                                             | swap | cross-chain |
-|----------------------------------------------------------------------------------|------|-------------|
-| [UniSwap](https://uniswap.org/)                                                  | ✅    |             |
-| [Gate.io](https://gate.io)                                                       | ✅    | ✅           |
-| [Helix Bridge](https://helixbridge.app/)                                         | ✅    |             |
-| [Darwinia Bridge](https://bridge.darwinia.network/)                              | ✅    |             |
-| [OKX web3](https://www.okx.com/zh-hans/web3/build/docs/waas/dex-crosschain-swap) | ✅    | ✅           |
+| name                                                                                 | swap | cross-chain |
+|--------------------------------------------------------------------------------------|------|-------------|
+| [UniSwap](https://uniswap.org/)                                                      | ✅    |             |
+| [Gate.io](https://gate.io)                                                           | ✅    | ✅           |
+| [Helix Bridge](https://helixbridge.app/)                                             | ✅    |             |
+| [Darwinia Bridge](https://bridge.darwinia.network/)                                  | ✅    |             |
+| [OKX web3](https://www.okx.com/zh-hans/web3/build/docs/waas/dex-crosschain-swap)     | ✅    | ✅           |
+| [Router Nitro](https://app.routernitro.com/swap) | ✅    | ✅           |
 
 
 ### Installation
