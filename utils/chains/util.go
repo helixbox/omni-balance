@@ -30,8 +30,8 @@ func getDecimals(decimals ...int32) int32 {
 }
 
 func EthToWei(v decimal.Decimal, decimals ...int32) *big.Int {
-	decimalStr := v.Mul(decimal.New(1, getDecimals(decimals...))).String()
-	wei, _ := new(big.Int).SetString(decimalStr, 10)
+	decimalStr := v.Mul(decimal.New(1, getDecimals(decimals...)))
+	wei, _ := new(big.Int).SetString(decimalStr.Truncate(0).String(), 10)
 	return wei
 }
 
@@ -168,7 +168,7 @@ func TokenApprove(ctx context.Context, args TokenApproveParams) error {
 	}
 	log.Debugf("erc20 allowance: %s", allowanceWei)
 	if decimal.NewFromBigInt(allowanceWei, 0).GreaterThanOrEqual(args.AmountWei) {
-		log.Debugf("erc20 allowance is enough, skip approve")
+		log.Debugf("erc20 allowance %s >= %s, skip approve", allowanceWei, args.AmountWei)
 		return nil
 	}
 	erc20Abi, err := erc20.TokenMetaData.GetAbi()
@@ -298,14 +298,6 @@ func SendTransaction(ctx context.Context, client simulated.Client, tx *types.Leg
 		return common.Hash{}, errors.Wrap(err, "sign tx")
 	}
 	return transaction.Hash(), client.SendTransaction(ctx, transaction)
-}
-
-func IsTransferInput(input []byte) bool {
-	if len(input) == 0 {
-		return false
-	}
-	_, _, err := GetTransferInfo(input)
-	return err == nil
 }
 
 // GetTransferInfo input ex: a9059cbb0000000000000000000000000350101f2cb6aa65caab7954246a56f906a3f57d0000000000000000000000000000000000000000033b2e3c9fd0803ce8000000

@@ -43,8 +43,8 @@ func createRecordFunction(order models.Order, log *logrus.Entry) func(s provider
 			log.Errorf("save %s bridge provider error: %s", order.TokenOutName, err.Error())
 			return
 		}
-		log.Infof("order #%d token %s cross from %s to %s action %s status is %s",
-			order.ID, order.TokenOutName, order.CurrentChainName, order.TargetChainName, s.Actions, s.Status)
+		log.Infof("order #%d action %s status is %s",
+			order.ID, s.Actions, s.Status)
 	}
 }
 

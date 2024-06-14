@@ -130,3 +130,31 @@ func TestByteZfill(t *testing.T) {
 		})
 	}
 }
+
+func TestHexToInt(t *testing.T) {
+	type args struct {
+		hex string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{"0x1", args{"0x1"}, "1"},
+		{"0xff", args{"0xff"}, "255"},
+		{"0xffff", args{"0xffff"}, "65535"},
+		{"0xffffff", args{"0xffffff"}, "16777215"},
+		{"0xffffffff", args{"0xffffffff"}, "4294967295"},
+		{"0xffffffffff", args{"0xffffffffff"}, "1099511627775"},
+		{"0xffffffffffff", args{"0xffffffffffff"}, "281474976710655"},
+		{"0xffffffffffffff", args{"0xffffffffffffff"}, "72057594037927935"},
+		{"0xffffffffffffffff", args{"0xffffffffffffffff"}, "18446744073709551615"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HexToString(tt.args.hex); got != tt.want {
+				t.Errorf("HexToInt() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

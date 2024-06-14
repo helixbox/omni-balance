@@ -112,6 +112,17 @@ func (b *Bridge) Swap(ctx context.Context, args provider.SwapParams) (result pro
 		}
 		tx.Gas = 406775
 
+		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
+			TokenIn:         args.SourceToken,
+			TokenOut:        args.TargetToken,
+			TokenInChain:    args.SourceChain,
+			TokenOutChain:   args.TargetChain,
+			ProviderName:    b.Name(),
+			TokenInAmount:   args.Amount,
+			TokenOutAmount:  args.Amount,
+			TransactionType: provider.TransferTransactionAction,
+		})
+
 		recordFn(provider.SwapHistory{Actions: sourceChainSendingAction, Status: string(provider.TxStatusPending),
 			CurrentChain: args.SourceChain})
 		txHash, err = wallet.SendTransaction(ctx, tx, ethClient)
@@ -204,7 +215,7 @@ func (b *Bridge) GetCost(ctx context.Context, args provider.SwapParams) (provide
 	}, nil
 }
 
-func (b *Bridge) CheckToken(ctx context.Context, tokenName, tokenInChainName, tokenOutChainName string, amount decimal.Decimal) (bool, error) {
+func (b *Bridge) CheckToken(_ context.Context, tokenName, tokenInChainName, tokenOutChainName string, _ decimal.Decimal) (bool, error) {
 	supportedChains, err := GetTokenSupportedChains(tokenName)
 	if err != nil {
 		return false, err

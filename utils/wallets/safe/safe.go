@@ -2,6 +2,7 @@ package safe
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -15,6 +16,7 @@ import (
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/notice"
 	"omni-balance/utils/wallets"
+	"strings"
 	"time"
 )
 
@@ -86,7 +88,7 @@ func (s *Safe) IsDifferentAddress() bool {
 	return true
 }
 
-func (s *Safe) SignRawMessage(msg []byte) (sig []byte, err error) {
+func (s *Safe) SignRawMessage(_ []byte) (sig []byte, err error) {
 	return nil, error_types.ErrUnsupportedWalletType
 }
 
@@ -114,7 +116,7 @@ func (s *Safe) SendTransaction(ctx context.Context, tx *types.LegacyTx, client s
 	return s.MultisigTransaction(ctx, tx, client)
 }
 
-func (s *Safe) WaitTransaction(ctx context.Context, txHash common.Hash, client simulated.Client) error {
+func (s *Safe) WaitTransaction(ctx context.Context, txHash common.Hash, _ simulated.Client) error {
 	var (
 		log   = utils.GetLogFromCtx(ctx)
 		t     = time.NewTicker(time.Second * 2)
@@ -127,16 +129,21 @@ func (s *Safe) WaitTransaction(ctx context.Context, txHash common.Hash, client s
 			return context.Canceled
 		case <-t.C:
 			tx, err := s.GetMultiSigTransaction(ctx, txHash)
+			if err != nil && strings.Contains(err.Error(), "No MultisigTransaction matches the given query") {
+				return errors.Wrap(err, "transaction not found")
+			}
 			if err != nil {
 				log.Debugf("wait transaction %s error: %s", txHash, err)
 				continue
 			}
 			if len(tx.Confirmations) < tx.ConfirmationsRequired {
+				count = 0
 				log.Debugf("transaction %s confirmations: %d, required: %d, try to sending notice",
 					txHash, len(tx.Confirmations), tx.ConfirmationsRequired)
 				if err := notice.Send(ctx,
-					fmt.Sprintf("wait transaction %s confirmations", txHash),
-					fmt.Sprintf("Please go to %s to confirm %d nonce transaction", tx.Safe, tx.Nonce),
+					fmt.Sprintf("wait %s safeHash %s confirmations and execute.", constant.GetChainName(s.GetChainIdByCtx(ctx)), txHash),
+					fmt.Sprintf("Please go to %s %s safe address to confirm  and execute #%d transaction.",
+						constant.GetChainName(s.GetChainIdByCtx(ctx)), tx.Safe, tx.Nonce),
 					logrus.WarnLevel,
 				); err != nil {
 					log.Debugf("send notice error: %s", err)
@@ -144,8 +151,8 @@ func (s *Safe) WaitTransaction(ctx context.Context, txHash common.Hash, client s
 				continue
 			}
 			if !tx.IsExecuted {
+				count = 0
 				log.Debugf("transaction %s is not executed", txHash)
-				count++
 				continue
 			}
 			if !tx.IsSuccessful {
@@ -158,4 +165,16 @@ func (s *Safe) WaitTransaction(ctx context.Context, txHash common.Hash, client s
 		}
 	}
 	return errors.Errorf("wait transaction %s timeout", txHash)
+}
+
+func (s *Safe) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"address": s.conf.Address.Hex(),
+		"operator": map[string]interface{}{
+			"address":         s.conf.Operator.Address.Hex(),
+			"operator":        s.conf.Operator.Operator.Hex(),
+			"multi_sign_type": s.conf.MultiSignType,
+		},
+		"multi_sign_type": s.conf.MultiSignType,
+	})
 }

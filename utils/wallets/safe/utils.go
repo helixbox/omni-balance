@@ -113,7 +113,7 @@ func (s *Safe) GetDomainByCtx(ctx context.Context) string {
 func (s *Safe) GetChainIdByCtx(ctx context.Context) int {
 	chainId := constant.GetChainId(cast.ToString(ctx.Value(constant.ChainNameKeyInCtx)))
 	if chainId == 0 {
-		logrus.Fatalf("chain id not found in context")
+		logrus.Fatalf("chain name not found in context")
 	}
 	return chainId
 }

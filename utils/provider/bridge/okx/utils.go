@@ -16,6 +16,7 @@ import (
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/constant"
+	"omni-balance/utils/error_types"
 	"omni-balance/utils/provider"
 	"strconv"
 	"strings"
@@ -84,71 +85,88 @@ func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams)
 	var (
 		tokenOut = o.conf.GetTokenInfoOnChain(args.TargetToken, args.TargetChain)
 	)
+	getQuote := func(chainName, tokenName string) error {
+		sourceToken := o.conf.GetTokenInfoOnChain(tokenName, chainName)
+		currentLog := log.WithField("TokenIn", sourceToken.Name).WithField("sourceChain", chainName).
+			WithField("TargetToken", args.TargetToken).WithField("TargetChain", args.TargetChain)
+		currentLog.Debug("start check tokenIn")
+		chain := o.conf.GetChainConfig(chainName)
+		tokenIn := o.conf.GetTokenInfoOnChain(sourceToken.Name, chainName)
+		if tokenIn.ContractAddress == "" {
+			return errors.Errorf("token %s on chain %s is not supported", sourceToken.Name, chainName)
+		}
+		client, err := chains.NewTryClient(ctx, chain.RpcEndpoints)
+		if err != nil {
+			currentLog.Debugf("new client error: %s", err)
+			return err
+		}
+
+		tokenInTestBalance := decimal.RequireFromString("1")
+		tokenInTestBalanceWei := decimal.NewFromBigInt(chains.EthToWei(tokenInTestBalance, tokenIn.Decimals), 0)
+		quote, err := o.Quote(ctx, QuoteParams{
+			Amount:           tokenInTestBalanceWei,
+			FormChainId:      chain.Id,
+			ToChainId:        constant.GetChainId(args.TargetChain),
+			ToTokenAddress:   common.HexToAddress(tokenOut.ContractAddress),
+			FromTokenAddress: common.HexToAddress(tokenIn.ContractAddress),
+		})
+		if err != nil {
+			logrus.Debugf("get quote error: %s", err)
+			return err
+		}
+		if len(quote.RouterList) == 0 {
+			currentLog.Debugf("no router list")
+			return errors.Errorf("no router list")
+		}
+		currentLog = currentLog.WithField("quote", utils.ToMap(quote))
+		currentLog.Debug("get quote success")
+
+		minimumReceived := chains.WeiToEth(quote.RouterList[0].MinimumReceived.BigInt(), tokenOut.Decimals)
+		needBalance := tokenInTestBalance.Div(minimumReceived).Mul(args.Amount)
+
+		balance, err := chains.GetTokenBalance(ctx, client, tokenIn.ContractAddress,
+			args.Sender.GetAddress(true).Hex(), tokenIn.Decimals)
+		if err != nil {
+			currentLog.Debugf("get balance error: %s", err)
+			return err
+		}
+
+		log.Debugf("need %s balance: %s, wallet %s balance: %s on %s",
+			tokenIn.Name, needBalance, tokenIn.Name, balance, chainName)
+		if needBalance.GreaterThan(balance) {
+			currentLog.Debugf("%s need balance: %s, balance: %s", tokenIn.Name, needBalance, balance)
+			return errors.Errorf("need %s balance: %s, balance: %s", tokenIn.Name, needBalance, balance)
+		}
+		if tokenInAmount.Equal(decimal.Zero) {
+			tokenInAmount = needBalance
+		}
+		if tokenInAmount.GreaterThan(needBalance) {
+			currentLog.Debugf("need balance: %s, balance: %s", needBalance, balance)
+			return errors.Errorf("need %s balance: %s, balance: %s", tokenIn.Name, needBalance, balance)
+		}
+		tokenInAmount = needBalance
+		tokenInName = sourceToken.Name
+		tokenInChainName = chainName
+		return nil
+	}
+	if args.SourceChain != "" && args.SourceToken != "" {
+		if err := getQuote(args.SourceChain, args.SourceToken); err != nil {
+			return "", "", tokenInAmount, err
+		}
+	}
+
 	for _, sourceToken := range o.conf.SourceToken {
 		for _, v := range sourceToken.Chains {
 			if strings.EqualFold(v, args.TargetChain) && sourceToken.Name == args.TargetToken {
 				continue
 			}
-			currentLog := log.WithField("TokenIn", sourceToken.Name).WithField("sourceChain", v).
-				WithField("TargetToken", args.TargetToken).WithField("TargetChain", args.TargetChain)
-			currentLog.Debug("start check tokenIn")
-			chain := o.conf.GetChainConfig(v)
-			tokenIn := o.conf.GetTokenInfoOnChain(sourceToken.Name, v)
-			if tokenIn.ContractAddress == "" {
+			if err := getQuote(v, sourceToken.Name); err != nil {
 				continue
 			}
-			client, err := chains.NewTryClient(ctx, chain.RpcEndpoints)
-			if err != nil {
-				currentLog.Debugf("new client error: %s", err)
-				continue
-			}
-
-			tokenInTestBalance := decimal.RequireFromString("1")
-			tokenInTestBalanceWei := decimal.NewFromBigInt(chains.EthToWei(tokenInTestBalance, tokenIn.Decimals), 0)
-			quote, err := o.Quote(ctx, QuoteParams{
-				Amount:           tokenInTestBalanceWei,
-				FormChainId:      chain.Id,
-				ToChainId:        constant.GetChainId(args.TargetChain),
-				ToTokenAddress:   common.HexToAddress(tokenOut.ContractAddress),
-				FromTokenAddress: common.HexToAddress(tokenIn.ContractAddress),
-			})
-			if err != nil {
-				logrus.Debugf("get quote error: %s", err)
-			}
-			if len(quote.RouterList) == 0 {
-				currentLog.Debugf("no router list")
-				continue
-			}
-			currentLog = currentLog.WithField("quote", utils.ToMap(quote))
-			currentLog.Debug("get quote success")
-
-			minimumReceived := chains.WeiToEth(quote.RouterList[0].MinimumReceived.BigInt(), tokenOut.Decimals)
-			needBalance := tokenInTestBalance.Div(minimumReceived).Mul(args.Amount)
-
-			balance, err := chains.GetTokenBalance(ctx, client, tokenIn.ContractAddress,
-				args.Sender.GetAddress(true).Hex(), tokenIn.Decimals)
-			if err != nil {
-				currentLog.Debugf("get balance error: %s", err)
-				continue
-			}
-
-			log.Debugf("need %s balance: %s, wallet %s balance: %s on %s",
-				tokenIn.Name, needBalance, tokenIn.Name, balance, v)
-			if needBalance.GreaterThan(balance) {
-				currentLog.Debugf("%s need balance: %s, balance: %s", tokenIn.Name, needBalance, balance)
-				continue
-			}
-			if tokenInAmount.Equal(decimal.Zero) {
-				tokenInAmount = needBalance
-			}
-			if tokenInAmount.GreaterThan(needBalance) {
-				currentLog.Debugf("need balance: %s, balance: %s", needBalance, balance)
-				continue
-			}
-			tokenInAmount = needBalance
-			tokenInName = sourceToken.Name
-			tokenInChainName = v
 		}
+	}
+	if tokenInChainName == "" || tokenInName == "" || tokenInAmount.IsZero() {
+		return "", "", tokenInAmount, error_types.ErrUnsupportedTokenAndChain
 	}
 	log.Debugf("best tokenInName: %s, tokenInChainName: %s, tokenInAmount: %s", tokenInName, tokenInChainName, tokenInAmount)
 	return

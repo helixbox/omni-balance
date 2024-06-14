@@ -42,7 +42,7 @@ type Uniswap struct {
 	conf configs.Config
 }
 
-func NewUniswap(conf configs.Config, noInit ...bool) (provider.Provider, error) {
+func NewUniswap(conf configs.Config, _ ...bool) (provider.Provider, error) {
 	return &Uniswap{conf: conf}, nil
 }
 
@@ -130,6 +130,16 @@ func (u *Uniswap) Swap(ctx context.Context, args provider.SwapParams) (result pr
 		// uint256 MAX see https://docs.uniswap.org/contracts/permit2/overview
 		amount := decimal.RequireFromString("115792089237316195423570985008687907853269984665640564039457584007913129639935")
 		log.Debugf("approve tokenIn amount: %s", amount)
+		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
+			TokenIn:         tokenIn.Name,
+			TokenOut:        args.TargetToken,
+			TokenInChain:    args.TargetChain,
+			TokenOutChain:   args.TargetChain,
+			ProviderName:    u.Name(),
+			TokenInAmount:   args.Amount,
+			TokenOutAmount:  args.Amount,
+			TransactionType: provider.SwapTransactionAction,
+		})
 		if err := chains.TokenApprove(ctx, chains.TokenApproveParams{
 			ChainId:         int64(chain.Id),
 			TokenAddress:    common.HexToAddress(tokenIn.ContractAddress),

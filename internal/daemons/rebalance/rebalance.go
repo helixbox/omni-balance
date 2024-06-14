@@ -91,8 +91,7 @@ func transfer(ctx context.Context, order *models.Order, args provider.SwapParams
 func reBalance(ctx context.Context, order *models.Order, conf configs.Config) error {
 	log := utils.GetLogFromCtx(ctx)
 	if order.Lock(db.DB()) {
-		log.Infof("order #%d locked, unlock time is %s", order.ID, time.Unix(order.LockTime+60*60*1, 0))
-		return nil
+		return errors.Errorf("order #%d locked, unlock time is %s", order.ID, time.Unix(order.LockTime+60*60*1, 0))
 	}
 	defer order.UnLock(db.DB())
 	var (
@@ -153,7 +152,10 @@ func reBalance(ctx context.Context, order *models.Order, conf configs.Config) er
 	log.Infof("start reBalance %s on %s use %s provider", order.TokenOutName, order.TargetChainName, providerObj.Name())
 	result, err := providerObj.Swap(ctx, args)
 	if err != nil {
-		log.Warnf("reBalance %s on %s error: %s", order.TokenOutName, providerObj.Name(), err.Error())
+		return errors.Wrapf(err, "reBalance %s on %s error", order.TokenOutName, providerObj.Name())
+	}
+	if result.Status == "" {
+		return errors.New("the result status is empty")
 	}
 	if err := createUpdateLog(ctx, order, result, conf, true, client); err != nil {
 		return errors.Wrap(err, "create update log error")
@@ -166,7 +168,7 @@ func reBalance(ctx context.Context, order *models.Order, conf configs.Config) er
 	return nil
 }
 
-func listOrders(ctx context.Context) ([]*models.Order, error) {
+func listOrders(_ context.Context) ([]*models.Order, error) {
 	var orders []*models.Order
 	err := db.DB().Where("status != ?", models.OrderStatusSuccess).Find(&orders).Error
 	if err != nil {
@@ -180,7 +182,7 @@ func createUpdateLog(ctx context.Context, order *models.Order, result provider.S
 
 	wallet := conf.GetWallet(order.Wallet)
 	walletBalance := getWalletTokenBalance(ctx, wallet, order.TokenOutName, order.TargetChainName, conf, client)
-	update := result.Marshal()
+
 	updateOrder := &models.Order{
 		TokenInName:      result.TokenInName,
 		SourceChainName:  result.TokenInChainName,
@@ -208,7 +210,7 @@ func createUpdateLog(ctx context.Context, order *models.Order, result provider.S
 		}
 
 	}
-	log.Debugf("order status is %s", update["status"])
+	log.Debugf("order status is %v", updateOrder.Status)
 	return db.DB().Model(&models.Order{}).Where("id = ?", order.ID).Limit(1).Updates(updateOrder).Error
 }
 

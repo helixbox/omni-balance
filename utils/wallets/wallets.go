@@ -22,6 +22,8 @@ type Wallets interface {
 	IsSupportEip712() bool
 	SignRawMessage(msg []byte) (sig []byte, err error)
 
+	MarshalJSON() ([]byte, error)
+
 	GetExternalBalance(ctx context.Context, tokenAddress common.Address, decimals int32, client simulated.Client) (decimal.Decimal, error)
 	GetBalance(ctx context.Context, tokenAddress common.Address, decimals int32, client simulated.Client) (decimal.Decimal, error)
 	GetNonce(ctx context.Context, client simulated.Client) (uint64, error)

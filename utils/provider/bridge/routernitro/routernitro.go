@@ -1,4 +1,4 @@
-package okx
+package routernitro
 
 import (
 	"context"
@@ -20,31 +20,23 @@ func init() {
 	provider.Register(configs.Bridge, New)
 }
 
-type OKX struct {
+type Routernitro struct {
 	conf configs.Config
-	Key  Config
 }
 
-func New(conf configs.Config, noInit ...bool) (provider.Provider, error) {
-	o := new(OKX)
-	if len(noInit) > 0 && noInit[0] {
-		return o, nil
-	}
-	if err := conf.GetProvidersConfig(o.Name(), o.Type(), &o.Key); err != nil {
-		return nil, err
-	}
-	o.conf = conf
-
-	return o, nil
+func New(conf configs.Config, _ ...bool) (provider.Provider, error) {
+	return Routernitro{
+		conf: conf,
+	}, nil
 }
 
-func (o *OKX) GetCost(ctx context.Context, args provider.SwapParams) (provider.TokenInCosts, error) {
+func (r Routernitro) GetCost(ctx context.Context, args provider.SwapParams) (provider.TokenInCosts, error) {
 	var (
 		err        error
 		costAmount decimal.Decimal
 	)
 	if args.SourceChain == "" || args.SourceToken == "" {
-		args.SourceToken, args.SourceChain, costAmount, err = o.GetBestTokenInChain(ctx, args)
+		args.SourceToken, args.SourceChain, costAmount, _, err = r.GetBestQuote(ctx, args)
 		if err != nil {
 			return nil, err
 		}
@@ -60,31 +52,29 @@ func (o *OKX) GetCost(ctx context.Context, args provider.SwapParams) (provider.T
 	}, nil
 }
 
-func (o *OKX) CheckToken(ctx context.Context, tokenName, tokenInChainName, tokenOutChainName string, amount decimal.Decimal) (bool, error) {
-	tokenOut := o.conf.GetTokenInfoOnChain(tokenName, tokenOutChainName)
-	tokenIn := o.conf.GetTokenInfoOnChain(tokenName, tokenInChainName)
-	amountWei := decimal.NewFromBigInt(chains.EthToWei(amount, tokenIn.Decimals), 0)
-	quote, err := o.Quote(ctx, QuoteParams{
-		Amount:           amountWei,
-		FormChainId:      constant.GetChainId(tokenInChainName),
-		ToChainId:        constant.GetChainId(tokenOutChainName),
-		ToTokenAddress:   common.HexToAddress(tokenOut.ContractAddress),
+func (r Routernitro) CheckToken(ctx context.Context, tokenName, tokenInChainName, tokenOutChainName string, amount decimal.Decimal) (bool, error) {
+	var (
+		tokenIn      = r.conf.GetTokenInfoOnChain(tokenName, tokenInChainName)
+		tokenOut     = r.conf.GetTokenInfoOnChain(tokenName, tokenOutChainName)
+		tokenInChain = r.conf.GetChainConfig(tokenInChainName)
+		tokenOuChain = r.conf.GetChainConfig(tokenOutChainName)
+	)
+
+	_, err := r.Quote(ctx, QuoteParams{
 		FromTokenAddress: common.HexToAddress(tokenIn.ContractAddress),
+		ToTokenAddress:   common.HexToAddress(tokenOut.ContractAddress),
+		AmountWei:        decimal.NewFromBigInt(chains.EthToWei(amount, tokenIn.Decimals), 0),
+		FromTokenChainId: tokenInChain.Id,
+		ToTokenChainId:   tokenOuChain.Id,
 	})
-	if err != nil {
-		return false, err
-	}
-	if len(quote.RouterList) == 0 {
-		return false, error_types.ErrUnsupportedTokenAndChain
-	}
-	return true, nil
+	return err == nil, err
 }
 
-func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.SwapResult, error) {
+func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provider.SwapResult, error) {
 	var (
 		err               error
-		targetChain       = o.conf.GetChainConfig(args.TargetChain)
-		tokenOut          = o.conf.GetTokenInfoOnChain(args.TargetToken, targetChain.Name)
+		targetChain       = r.conf.GetChainConfig(args.TargetChain)
+		tokenOut          = r.conf.GetTokenInfoOnChain(args.TargetToken, targetChain.Name)
 		tokenOutAmount    = args.Amount
 		tokenOutAmountWei = decimal.NewFromBigInt(chains.EthToWei(tokenOutAmount, tokenOut.Decimals), 0)
 		tokenIn           configs.Token
@@ -96,17 +86,23 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		actionNumber      = Action2Int(history.Actions)
 		isActionSuccess   = history.Status == provider.TxStatusSuccess.String()
 		sourceChain       configs.Chain
+		quote             Quote
 	)
 
-	args.SourceToken, args.SourceChain, costAmount, err = o.GetBestTokenInChain(ctx, args)
+	args.SourceToken, args.SourceChain, costAmount, quote, err = r.GetBestQuote(ctx, args)
 	if err != nil {
 		return provider.SwapResult{}, err
 	}
+
+	if quote.Destination.TokenAmount.IsZero() {
+		return provider.SwapResult{}, errors.New("token out amount is zero")
+	}
+
 	if args.SourceChain == "" || args.SourceToken == "" {
 		utils.GetLogFromCtx(ctx).Fatalf("source chain and token is required")
 	}
 
-	tokenIn = o.conf.GetTokenInfoOnChain(args.SourceToken, args.SourceChain)
+	tokenIn = r.conf.GetTokenInfoOnChain(args.SourceToken, args.SourceChain)
 
 	if args.SourceToken != args.TargetToken {
 		tokenInAmount = costAmount
@@ -115,12 +111,13 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		tokenInAmount = tokenOutAmount
 		tokenInAmountWei = decimal.NewFromBigInt(chains.EthToWei(tokenInAmount, tokenIn.Decimals), 0)
 	}
-	sourceChain = o.conf.GetChainConfig(args.SourceChain)
-	isTokenInNative := o.conf.IsNativeToken(sourceChain.Name, tokenIn.Name)
+	sourceChain = r.conf.GetChainConfig(args.SourceChain)
+	isTokenInNative := r.conf.IsNativeToken(sourceChain.Name, tokenIn.Name)
 
 	if tokenOutAmount.LessThanOrEqual(decimal.Zero) {
 		return provider.SwapResult{}, errors.New("token out amount is zero")
 	}
+
 	ctx = context.WithValue(ctx, constant.ChainNameKeyInCtx, sourceChain.Name)
 
 	log := utils.GetLogFromCtx(ctx).WithFields(logrus.Fields{
@@ -140,48 +137,43 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 	var (
 		result = new(provider.SwapResult).SetTokenInName(tokenIn.Name).
 			SetTokenInChainName(sourceChain.Name).
-			SetProviderType(o.Type()).
-			SetProviderName(o.Name()).
+			SetProviderType(r.Type()).
+			SetProviderName(r.Name()).
 			SetStatus(provider.TxStatusPending)
 		sh = &provider.SwapHistory{
-			ProviderName: o.Name(),
-			ProviderType: string(o.Type()),
+			ProviderName: r.Name(),
+			ProviderType: string(r.Type()),
 			Amount:       args.Amount,
 		}
 	)
 
 	if !isTokenInNative && actionNumber <= 1 && !isActionSuccess {
 		log.Debug("the source token is not native token, need approve")
+		sh = sh.SetActions(ApproveTransactionAction)
+		args.RecordFn(sh.SetStatus(provider.TxStatusPending).Out())
 		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
 			TokenIn:         tokenIn.Name,
 			TokenOut:        tokenOut.Name,
 			TokenInChain:    args.SourceChain,
 			TokenOutChain:   args.TargetChain,
-			ProviderName:    o.Name(),
+			ProviderName:    r.Name(),
 			TokenInAmount:   tokenInAmount,
 			TokenOutAmount:  tokenOutAmount,
 			TransactionType: provider.ApproveTransactionAction,
 		})
-		approveTransaction, err := o.approveTransaction(ctx, sourceChain.Id,
-			common.HexToAddress(tokenIn.ContractAddress), tokenInAmountWei)
-		if err != nil {
-			err = errors.Wrap(err, "get approve transaction from okx error")
-			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
-		}
-		log.Debugf("get approve transaction from okx, the spender is %s", approveTransaction.DexContractAddress)
-		sh = sh.SetActions(ApproveTransactionAction)
-		args.RecordFn(sh.SetStatus(provider.TxStatusPending).Out())
-		err = chains.TokenApprove(ctx, chains.TokenApproveParams{
-			ChainId:         int64(sourceChain.Id),
-			TokenAddress:    common.HexToAddress(tokenIn.ContractAddress),
-			Owner:           args.Sender.GetAddress(true),
-			SendTransaction: args.Sender.SendTransaction,
-			WaitTransaction: args.Sender.WaitTransaction,
-			Spender:         common.HexToAddress(approveTransaction.DexContractAddress),
-			// for save next gas, multiply 2
-			AmountWei: tokenInAmountWei.Mul(decimal.RequireFromString("2")),
-			Client:    client,
-		})
+
+		err = chains.TokenApprove(ctx,
+			chains.TokenApproveParams{
+				ChainId:         int64(sourceChain.Id),
+				TokenAddress:    common.HexToAddress(tokenIn.ContractAddress),
+				Owner:           args.Sender.GetAddress(true),
+				SendTransaction: args.Sender.SendTransaction,
+				WaitTransaction: args.Sender.WaitTransaction,
+				Spender:         common.HexToAddress(quote.AllowanceTo),
+				// for save next gas, multiply 2
+				AmountWei: tokenInAmountWei.Mul(decimal.RequireFromString("2")),
+				Client:    client,
+			})
 		if err != nil {
 			args.RecordFn(sh.SetStatus(provider.TxStatusFailed).Out(), err)
 			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
@@ -198,35 +190,51 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 			TokenOut:        tokenOut.Name,
 			TokenInChain:    args.SourceChain,
 			TokenOutChain:   args.TargetChain,
-			ProviderName:    o.Name(),
+			ProviderName:    r.Name(),
 			TokenInAmount:   tokenInAmount,
 			TokenOutAmount:  tokenOutAmount,
 			TransactionType: provider.SwapTransactionAction,
 		})
 		log = log.WithField("swap_params", utils.ToMap(args))
 		log.Debug("start build tx")
-		buildTx, err := o.buildTx(ctx, args)
+
+		buildTx, err := r.BuildTx(ctx, quote, args.Sender.GetAddress(true), common.HexToAddress(args.Receiver))
 		if err != nil {
 			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "build tx error")
 		}
+		value := decimal.RequireFromString(utils.HexToString(buildTx.Txn.Value))
+		if buildTx.Destination.TokenAmount.IsZero() {
+			err = errors.Errorf("token out amount is zero")
+			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "build tx error")
+		}
+		if StandardizeZeroAddress(buildTx.ToTokenAddress).Cmp(StandardizeZeroAddress(common.HexToAddress(tokenOut.ContractAddress))) != 0 {
+			err = errors.Errorf("token out address is not match, expect: %s, actual: %s",
+				tokenOut.ContractAddress, buildTx.ToTokenAddress.Hex())
+			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "build tx error")
+		}
+		if StandardizeZeroAddress(buildTx.FromTokenAddress).Cmp(StandardizeZeroAddress(common.HexToAddress(tokenIn.ContractAddress))) != 0 {
+			err = errors.Errorf("token in address is not match, expect: %s, actual: %s",
+				tokenIn.ContractAddress, buildTx.FromTokenAddress.Hex())
+			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "build tx error")
+		}
 
-		log.WithField("tx_data", buildTx.ToMap()).Debugf("get tx data from okx")
+		log.WithField("tx_data", utils.ToMap(buildTx)).Debugf("get tx data from routernitro")
 		args.Amount = amount
-		if buildTx.ToTokenAmount.Div(tokenOutAmountWei).LessThan(decimal.RequireFromString("0.5")) {
+		if buildTx.Destination.TokenAmount.Div(tokenOutAmountWei).LessThan(decimal.RequireFromString("0.5")) {
 			err = errors.Errorf("minmum receive is too low, minmum receive: %s, amount: %s",
-				buildTx.ToTokenAmount, tokenOutAmountWei)
+				buildTx.Destination.TokenAmount, tokenOutAmountWei)
 			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
 		}
-		if !isTokenInNative && !buildTx.Tx.Value.IsZero() {
+		if !isTokenInNative && !value.IsZero() {
 			err = errors.Errorf("tokenin is not native token, but value is not zero")
 			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
 		}
-		if isTokenInNative && buildTx.Tx.Value.IsZero() {
+		if isTokenInNative && value.IsZero() {
 			err = errors.Errorf("tokenin is native token, but value is zero")
 			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
 		}
-		if isTokenInNative && buildTx.Tx.Value.GreaterThan(tokenInAmountWei.Mul(decimal.RequireFromString("1.5"))) {
-			err = errors.Errorf("tx value is too high, tx value: %s, amount: %s", buildTx.Tx.Value, tokenInAmountWei)
+		if isTokenInNative && value.GreaterThan(tokenInAmountWei.Mul(decimal.RequireFromString("1.5"))) {
+			err = errors.Errorf("tx value is too high, tx value: %s, amount: %s", buildTx.Txn.Value, tokenInAmountWei)
 			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
 		}
 		sh = sh.SetActions(SourceChainSendingAction)
@@ -234,9 +242,9 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		log.Debug("sending tx on chain")
 		//return provider.SwapResult{}, nil
 		txHash, err := args.Sender.SendTransaction(ctx, &types.LegacyTx{
-			To:    &buildTx.Tx.To,
-			Value: buildTx.Tx.Value.BigInt(),
-			Data:  common.Hex2Bytes(strings.TrimPrefix(buildTx.Tx.Data, "0x")),
+			To:    &buildTx.Txn.To,
+			Value: value.BigInt(),
+			Data:  common.Hex2Bytes(strings.TrimPrefix(buildTx.Txn.Data, "0x")),
 		}, client)
 		if err != nil {
 			args.RecordFn(sh.SetStatus(provider.TxStatusFailed).Out(), err)
@@ -255,29 +263,26 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		args.RecordFn(sh.SetStatus(provider.TxStatusFailed).Out(), err)
 		return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "wait tx error")
 	}
-	log.Debug("waiting for tx in okx")
-	if err := o.WaitForTx(ctx, common.HexToHash(tx), sourceChain.Id); err != nil {
+	log.Debug("waiting for tx in routernitro")
+	if err := r.WaitForTx(ctx, common.HexToHash(tx)); err != nil {
 		args.RecordFn(sh.SetStatus(provider.TxStatusFailed).Out(), err)
 		return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "wait okx error")
 	}
-	log.Debugf("waiting for tx success in okx")
+	log.Debugf("waiting for tx success in routernitro")
 	args.RecordFn(sh.SetStatus(provider.TxStatusSuccess).SetCurrentChain(targetChain.Name).Out())
 	return result.SetStatus(provider.TxStatusSuccess).SetCurrentChain(targetChain.Name).SetTx(tx).SetOrderId(tx).Out(), nil
 }
 
-func (o *OKX) Help() []string {
-	var result []string
-	for _, v := range utils.ExtractTagFromStruct(&Config{}, "yaml", "help") {
-		result = append(result, v["yaml"]+": "+v["help"])
+func (r Routernitro) Help() []string {
+	return []string{
+		"see https://app.routernitro.com/swap",
 	}
-	result = append(result, "You can get these configs from https://www.okx.com/zh-hans/web3/build/docs/waas/introduction-to-developer-portal-interface")
-	return result
 }
 
-func (o *OKX) Name() string {
-	return "okx"
+func (r Routernitro) Name() string {
+	return "router_nitro"
 }
 
-func (o *OKX) Type() configs.LiquidityProviderType {
+func (r Routernitro) Type() configs.LiquidityProviderType {
 	return configs.Bridge
 }

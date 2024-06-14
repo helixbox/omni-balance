@@ -93,10 +93,10 @@ func New(conf configs.Config, noInit ...bool) (provider.Provider, error) {
 	return d, nil
 }
 
-func (b *Bridge) CheckToken(ctx context.Context, tokenName, tokenInChainName, tokenOutChainName string,
-	amount decimal.Decimal) (bool, error) {
+func (b *Bridge) CheckToken(_ context.Context, tokenName, tokenInChainName, tokenOutChainName string,
+	_ decimal.Decimal) (bool, error) {
 
-	sourceChains := GetSourceChains(int64(constant.GetChainId(tokenInChainName)), tokenName)
+	sourceChains := GetSourceChains(int64(constant.GetChainId(tokenOutChainName)), tokenName)
 	if len(sourceChains) == 0 {
 		return false, nil
 	}
@@ -215,6 +215,17 @@ func (b *Bridge) Swap(ctx context.Context, args provider.SwapParams) (result pro
 	if actionNumber <= 1 && history.Status != string(provider.TxStatusSuccess) {
 		recordFn(provider.SwapHistory{Actions: sourceChainSendingAction, Status: string(provider.TxStatusPending),
 			CurrentChain: args.SourceChain})
+		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
+			TokenIn:         args.SourceToken,
+			TokenOut:        args.TargetToken,
+			TokenInChain:    args.SourceChain,
+			TokenOutChain:   args.TargetChain,
+			ProviderName:    b.Name(),
+			TokenInAmount:   args.Amount,
+			TokenOutAmount:  args.Amount,
+			TransactionType: provider.TransferTransactionAction,
+		})
+
 		txHash, err := args.Sender.SendTransaction(ctx, tx, ethClient)
 		if err != nil {
 			recordFn(provider.SwapHistory{Actions: sourceChainSendingAction, Status: string(provider.TxStatusFailed),

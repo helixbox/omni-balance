@@ -36,8 +36,9 @@ const (
 )
 
 const (
-	ChainNameKeyInCtx ContextKey = "chain_name"
-	LogKeyInCtx       ContextKey = "log"
+	ChainNameKeyInCtx    ContextKey = "chain_name"
+	LogKeyInCtx          ContextKey = "log"
+	NoticeFieldsKeyInCtx ContextKey = "notice_fields"
 )
 
 var (
@@ -91,20 +92,4 @@ func GetChainName[t constraints.Integer](chainId t) string {
 
 func GetChainId(chainName string) int {
 	return chainName2Id[chainName]
-}
-
-func ListChainId() []int {
-	var chainIds []int
-	for _, v := range chainName2Id {
-		chainIds = append(chainIds, v)
-	}
-	return chainIds
-}
-
-func ListChainName() []string {
-	var chainNames []string
-	for k := range chainName2Id {
-		chainNames = append(chainNames, k)
-	}
-	return chainNames
 }

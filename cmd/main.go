@@ -21,6 +21,7 @@ import (
 	_ "omni-balance/utils/provider/bridge/darwinia"
 	_ "omni-balance/utils/provider/bridge/helix"
 	_ "omni-balance/utils/provider/bridge/okx"
+	_ "omni-balance/utils/provider/bridge/routernitro"
 	_ "omni-balance/utils/provider/cex/gate"
 	_ "omni-balance/utils/provider/dex/uniswap"
 	_ "omni-balance/utils/wallets/safe"
@@ -82,6 +83,7 @@ func Action(cli *cli.Context) error {
 	if err := notice.Init(notice.Type(config.Notice.Type), config.Notice.Config); err != nil {
 		logrus.Warnf("init notice error: %v", err)
 	}
+	notice.SetMsgInterval(config.Notice.Interval)
 
 	if err := db.InitDb(*config); err != nil {
 		return errors.Wrap(err, "init db")

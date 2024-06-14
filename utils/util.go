@@ -134,6 +134,12 @@ func Request(ctx context.Context, method string, url string, body io.Reader, des
 	for i := 0; i < len(headers); i += 2 {
 		req.Header.Set(headers[i], headers[i+1])
 	}
+	if req.Header.Get("content-type") == "" {
+		req.Header.Set("content-type", "application/json")
+	}
+	if req.Header.Get("accept") == "" {
+		req.Header.Set("accept", "application/json")
+	}
 	req = req.WithContext(ctx)
 	var count int
 	for count < 3 {
@@ -156,7 +162,10 @@ func Request(ctx context.Context, method string, url string, body io.Reader, des
 			continue
 		}
 		_ = resp.Body.Close()
-		return json.Unmarshal(data, dest)
+		if err := json.Unmarshal(data, dest); err != nil {
+			return errors.Errorf("response code is %s, body: %s", resp.Status, data)
+		}
+		return nil
 	}
 	return errors.New("request failed")
 }
@@ -189,4 +198,9 @@ func GetLogFromCtx(ctx context.Context) *logrus.Entry {
 		return v
 	}
 	return logrus.NewEntry(logrus.StandardLogger())
+}
+
+func HexToString(v string) string {
+	i, _ := new(big.Int).SetString(strings.TrimPrefix(v, "0x"), 16)
+	return i.String()
 }

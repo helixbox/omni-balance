@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/pkg/errors"
@@ -10,6 +11,15 @@ import (
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
+	"omni-balance/utils/notice"
+)
+
+type TransactionType string
+
+var (
+	ApproveTransactionAction  TransactionType = "Approve"
+	TransferTransactionAction TransactionType = "Transfer"
+	SwapTransactionAction     TransactionType = "Swap"
 )
 
 var (
@@ -57,7 +67,6 @@ func Transfer(ctx context.Context, conf configs.Config, args SwapParams, client 
 	if !utils.InArray(args.LastHistory.Actions, []string{transferSent, transferReceived}) {
 		actionNumber = 0
 		args.LastHistory.Status = ""
-		log.Debugf("last transfer not found, reinitializing")
 	}
 
 	var txHash = last.Tx
@@ -158,4 +167,37 @@ func GetTokenCrossChainProviders(ctx context.Context, args GetTokenCrossChainPro
 		providers = append(providers, bridge)
 	}
 	return providers, nil
+}
+
+type WithNotifyParams struct {
+	TokenIn, TokenOut, TokenInChain, TokenOutChain, ProviderName string
+	TokenInAmount, TokenOutAmount                                decimal.Decimal
+	TransactionType                                              TransactionType
+}
+
+func WithNotify(ctx context.Context, args WithNotifyParams) context.Context {
+	var fields = map[string]string{
+		"transactionType": string(args.TransactionType),
+		"providerName":    args.ProviderName,
+	}
+	if args.TokenIn != "" {
+		fields["tokenIn"] = args.TokenIn
+		if !args.TokenInAmount.IsZero() {
+			fields["tokenIn"] = fmt.Sprintf("%s %s", args.TokenInAmount, fields["tokenIn"])
+		}
+		if args.TokenInChain != "" {
+			fields["tokenIn"] = fmt.Sprintf("%s on %s", fields["tokenIn"], args.TokenInChain)
+		}
+	}
+
+	if args.TokenOut != "" {
+		fields["tokenOut"] = args.TokenOut
+		if !args.TokenOutAmount.IsZero() {
+			fields["tokenOut"] = fmt.Sprintf("%s %s", args.TokenOutAmount, fields["tokenOut"])
+		}
+		if args.TokenOutChain != "" {
+			fields["tokenOut"] = fmt.Sprintf("%s on %s", fields["tokenOut"], args.TokenOutChain)
+		}
+	}
+	return notice.WithFields(ctx, fields)
 }

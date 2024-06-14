@@ -45,11 +45,7 @@ func Level2SlackColor(level logrus.Level) string {
 	}
 }
 
-func (s *Slack) Send(ctx context.Context, title string, content string, levels ...logrus.Level) error {
-	var level = logrus.DebugLevel
-	if len(levels) > 0 {
-		level = levels[0]
-	}
+func (s *Slack) Send(ctx context.Context, title string, content string, level logrus.Level, fields Fields) error {
 	b := &body{
 		Channel:     s.Channel,
 		Username:    "omni-balance",
@@ -73,10 +69,23 @@ func (s *Slack) Send(ctx context.Context, title string, content string, levels .
 			},
 		},
 	}
+	for k, v := range fields {
+		if utils.InArrayFold(k, []string{"title", "message"}) {
+			continue
+		}
+		if v == "" || k == "" {
+			continue
+		}
+		b.Attachments[0].Fields = append(b.Attachments[0].Fields, Field{
+			Title: k,
+			Value: v,
+			Short: true,
+		})
+	}
 	var bodyBuf = bytes.NewBuffer(nil)
 	if err := json.NewEncoder(bodyBuf).Encode(b); err != nil {
 		return err
 	}
-	_ = utils.Request(ctx, http.MethodPost, s.Webhook, bodyBuf, nil, "Content-Type", "application/json")
+	_ = utils.Request(ctx, http.MethodPost, s.Webhook, bodyBuf, nil)
 	return nil
 }

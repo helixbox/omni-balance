@@ -8,11 +8,15 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"omni-balance/utils"
+	"omni-balance/utils/constant"
+	"sync"
 	"time"
 )
 
 var (
-	msg = cache.New(time.Hour, time.Minute)
+	msgInterval = time.Hour
+	msg         = cache.New(time.Hour, time.Minute)
+	m           sync.Mutex
 )
 
 type Type string
@@ -25,8 +29,22 @@ var (
 	notice Notice
 )
 
+type Fields map[string]string
+
 type Notice interface {
-	Send(ctx context.Context, title string, content string, levels ...logrus.Level) error
+	Send(ctx context.Context, title string, content string, level logrus.Level, fields Fields) error
+}
+
+func SetMsgInterval(interval time.Duration) {
+	if interval.Seconds() < time.Hour.Seconds() {
+		msgInterval = time.Hour
+		return
+	}
+	msgInterval = interval
+}
+
+func WithFields(ctx context.Context, fields Fields) context.Context {
+	return context.WithValue(ctx, constant.NoticeFieldsKeyInCtx, fields)
 }
 
 func Init(noticeType Type, conf map[string]interface{}) error {
@@ -50,6 +68,8 @@ func Init(noticeType Type, conf map[string]interface{}) error {
 }
 
 func Send(ctx context.Context, title string, content string, levels ...logrus.Level) error {
+	m.Lock()
+	defer m.Unlock()
 	if notice == nil {
 		return nil
 	}
@@ -59,9 +79,17 @@ func Send(ctx context.Context, title string, content string, levels ...logrus.Le
 		logrus.Debugf("notice %s:%s already send, 1 hour later will send again", title, content)
 		return nil
 	}
-	if err := notice.Send(ctx, title, content, levels...); err != nil {
+	if len(levels) == 0 {
+		levels = append(levels, logrus.InfoLevel)
+	}
+	var fields Fields
+	value := ctx.Value(constant.NoticeFieldsKeyInCtx)
+	if v, ok := value.(Fields); ok {
+		fields = v
+	}
+	if err := notice.Send(ctx, title, content, levels[0], fields); err != nil {
 		return err
 	}
-	msg.SetDefault(key, struct{}{})
+	msg.Set(key, struct{}{}, msgInterval)
 	return nil
 }

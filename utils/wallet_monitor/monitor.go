@@ -102,7 +102,7 @@ func (m *Monitor) Check(ctx context.Context, ignoreToken ...IgnoreToken) (result
 					}
 					balance, err := m.GetBalance(ctx, m.config.GetWallet(wallet.Address), token.Name, chainName)
 					if err != nil {
-						logrus.Errorf("get %s balance error: %s", token.Name, err.Error())
+						logrus.Errorf("get %s on %s balance error: %s", token.Name, chainName, err.Error())
 						continue
 					}
 
@@ -118,7 +118,7 @@ func (m *Monitor) Check(ctx context.Context, ignoreToken ...IgnoreToken) (result
 						logrus.Errorf("token %s config amount is invalid", token.Name)
 						continue
 					}
-					logrus.Debugf("wallet %s token %s on %s need rebalance %s",
+					logrus.Infof("wallet %s token %s on %s need rebalance %s",
 						wallet.Address, token.Name, chainName, amount.String())
 					appendBalances(wallet.Address, token.Name, ReBalanceTokenChain{
 						BuyTokenInfo: BuyTokenInfo{

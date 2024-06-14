@@ -2,6 +2,7 @@ package wallets
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -75,6 +76,16 @@ func NewPrivateKeyWallet(conf WalletConfig) *PrivateKeyWallet {
 	return p
 }
 
+func (p *PrivateKeyWallet) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"address": p.GetAddress(),
+		"operator": map[string]interface{}{
+			"address":  p.conf.Operator.Address,
+			"operator": p.conf.Operator.Operator,
+		},
+	})
+}
+
 func (p *PrivateKeyWallet) GetAddress(isReal ...bool) common.Address {
 	if len(isReal) == 0 ||
 		!isReal[0] ||
@@ -98,7 +109,7 @@ func (p *PrivateKeyWallet) IsDifferentAddress() bool {
 	return p.GetAddress().Cmp(p.GetAddress(true)) != 0
 }
 
-func (p *PrivateKeyWallet) CheckFullAccess(ctx context.Context) error {
+func (p *PrivateKeyWallet) CheckFullAccess(_ context.Context) error {
 	return nil
 }
 
