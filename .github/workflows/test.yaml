@@ -1,0 +1,45 @@
+name: Release
+on:
+  push:
+    branches: ["*"]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Golang with cache
+        uses: magnetikonline/action-golang-cache@v4
+        with:
+          go-version-file: go.mod
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          args: --timeout=10m
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: init gitleaks
+        run: |
+          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.0/gitleaks_8.18.0_linux_x64.tar.gz
+          tar -zxvf gitleaks_8.18.0_linux_x64.tar.gz -C /tmp/
+          sudo mv /tmp/gitleaks /usr/local/bin/
+      - name: gitleaks
+        run: |
+          gitleaks detect  -v --redact --no-git -i ./.gitleaksignore
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup Golang with cache
+        uses: magnetikonline/action-golang-cache@v4
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test -v ./...
