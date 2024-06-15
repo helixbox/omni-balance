@@ -6,21 +6,16 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
-	"omni-balance/utils"
 	"omni-balance/utils/configs"
+	"omni-balance/utils/provider"
 	"time"
 )
 
 type OrderStatus string
 
 const (
-	OrderStatusWait OrderStatus = "wait"
-	//OrderStatusProcessing               OrderStatus = "processing"
-	OrderStatusSuccess OrderStatus = "success"
-	//OrderStatusFail                     OrderStatus = "fail"
-	OrderStatusWaitTransferFromOperator OrderStatus = "wait_transfer_from_operator"
-	OrderStatusWaitCrossChain           OrderStatus = "wait_cross_chain"
-	OrderStatusUnknown                  OrderStatus = "unknown"
+	OrderStatusWaitTransferFromOperator provider.TxStatus = "wait_transfer_from_operator"
+	OrderStatusWaitCrossChain           provider.TxStatus = "wait_cross_chain"
 )
 
 type Order struct {
@@ -36,7 +31,7 @@ type Order struct {
 	Amount           decimal.Decimal               `json:"amount" gorm:"type:decimal(32,16); default:0"`
 	IsLock           bool                          `json:"is_lock" gore:"type:boolean; default:false"`
 	LockTime         int64                         `json:"lock_time" gorm:"default:0"`
-	Status           OrderStatus                   `json:"status" gorm:"type:int; default:0;index"`
+	Status           provider.TxStatus             `json:"status" gorm:"type:int; default:0;index"`
 	ProviderType     configs.LiquidityProviderType `json:"provider_type" gorm:"type:varchar(64)"`
 	ProviderName     string                        `json:"provider_name" gorm:"type:varchar(64)"`
 	ProviderOrderId  string                        `json:"order_id" gorm:"type:varchar(64)"`
@@ -64,10 +59,14 @@ func (o *Order) UnLock(db *gorm.DB) {
 	db.Model(&Order{}).Where("id = ?", o.ID).Updates(map[string]interface{}{"is_lock": false, "lock_time": 0})
 }
 
+func (o *Order) HasLocked() bool {
+	return o.IsLock && time.Unix(o.LockTime, 0).Add(time.Hour).Unix() > time.Now().Unix()
+}
+
 func (o *Order) Lock(db *gorm.DB) bool {
 	var order Order
 	db.Where("id = ?", o.ID).First(&order)
-	if order.IsLock && time.Unix(order.LockTime, 0).Add(time.Hour).Unix() < time.Now().Unix() {
+	if order.HasLocked() {
 		return true
 	}
 	db.Model(&Order{}).Where("id = ?", o.ID).Updates(map[string]interface{}{"is_lock": 1, "lock_time": time.Now().Unix()})
@@ -81,7 +80,7 @@ func (o *Order) SaveProvider(db *gorm.DB, provider configs.LiquidityProviderType
 func (o *Order) Success(db *gorm.DB, tx string, order interface{}, balance decimal.Decimal) error {
 	data, _ := json.Marshal(order)
 	return db.Model(&Order{}).Where("id = ?", o.ID).Updates(map[string]interface{}{
-		"status":             OrderStatusSuccess,
+		"status":             provider.TxStatusSuccess,
 		"tx":                 tx,
 		"current_chain_name": o.TargetChainName,
 		"order":              json.RawMessage(data),
@@ -95,8 +94,22 @@ func GetLastOrderProcess(ctx context.Context, db *gorm.DB, orderId uint) OrderPr
 	return result
 }
 
+func GetOrder(ctx context.Context, db *gorm.DB, orderId uint) *Order {
+	var result = new(Order)
+	_ = db.WithContext(ctx).Where("id = ?", orderId).First(&result)
+	if result.ID == 0 {
+		return nil
+	}
+	return result
+}
+
 func (o *Order) GetLogs() *logrus.Entry {
+	fields := map[string]interface{}{
+		"orderId":         o.ID,
+		"TargetChainName": o.TargetChainName,
+		"TokenOutName":    o.TokenOutName,
+	}
 	return logrus.WithFields(logrus.Fields{
-		"order": utils.ToMap(o),
+		"order": fields,
 	})
 }

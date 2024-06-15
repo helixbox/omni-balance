@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/cast"
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/constant"
@@ -178,4 +179,22 @@ func (s *Safe) MarshalJSON() ([]byte, error) {
 		},
 		"multi_sign_type": s.conf.MultiSignType,
 	})
+}
+
+func (s *Safe) GetRealHash(ctx context.Context, txHash common.Hash, client simulated.Client) (common.Hash, error) {
+	tx, err := s.GetMultiSigTransaction(ctx, txHash)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	if len(tx.Confirmations) != tx.ConfirmationsRequired {
+		return [32]byte{}, errors.New("transaction not confirmed")
+	}
+	if tx.TransactionHash == nil {
+		return [32]byte{}, errors.New("transaction hash is empty")
+	}
+	txHashStr := cast.ToString(tx.TransactionHash)
+	if txHashStr == "" {
+		return [32]byte{}, errors.Errorf("transaction hash convert to hash error, the result is %+v", tx.TransactionHash)
+	}
+	return common.HexToHash(txHashStr), nil
 }

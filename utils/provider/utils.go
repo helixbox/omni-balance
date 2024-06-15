@@ -69,7 +69,23 @@ func Transfer(ctx context.Context, conf configs.Config, args SwapParams, client 
 		actionNumber = 0
 		args.LastHistory.Status = ""
 	}
+	sr := new(SwapResult).
+		SetTokenInName(args.SourceToken).
+		SetTokenInChainName(args.SourceChain).
+		SetProviderName("transfer").
+		SetProviderType("direct").
+		SetCurrentChain(args.SourceChain).
+		SetTx(args.LastHistory.Tx)
+	sh := &SwapHistory{
+		ProviderName: "transfer",
+		ProviderType: "direct",
+		Amount:       args.Amount,
+		CurrentChain: args.SourceChain,
+		Tx:           last.Tx,
+	}
+
 	ctx = WithNotify(ctx, WithNotifyParams{
+		OrderId:         args.OrderId,
 		Receiver:        common.HexToAddress(args.Receiver),
 		TokenIn:         args.SourceToken,
 		TokenOut:        args.TargetToken,
@@ -80,6 +96,7 @@ func Transfer(ctx context.Context, conf configs.Config, args SwapParams, client 
 		TokenOutAmount:  args.Amount,
 		TransactionType: TransferTransactionAction,
 	})
+	ctx = context.WithValue(ctx, constant.ChainNameKeyInCtx, args.SourceChain)
 
 	var txHash = last.Tx
 	if actionNumber < 1 && args.LastHistory.Status != TxStatusSuccess.String() {
@@ -88,57 +105,39 @@ func Transfer(ctx context.Context, conf configs.Config, args SwapParams, client 
 			Sender:       args.Sender.GetAddress(true),
 			GetBalance:   args.Sender.GetBalance,
 			TokenAddress: common.HexToAddress(token.ContractAddress),
-			ToAddress:    args.Sender.GetAddress(),
+			ToAddress:    common.HexToAddress(args.Receiver),
 			AmountWei:    decimal.NewFromBigInt(chains.EthToWei(args.Amount, token.Decimals), 0),
 		})
-
+		sr = sr.SetOrder(common.Bytes2Hex(transaction.Data))
 		if err != nil {
-			return *result, errors.Wrap(err, "send token error")
+			return sr.SetStatus(TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "send token error")
 		}
 		log.Debugf("%s transfer %s %s to %s", args.Sender.GetAddress(true), args.TargetToken,
 			args.Amount, args.Sender.GetAddress())
-		recordFn(SwapHistory{
-			Actions: transferSent,
-			Status:  TxStatusPending.String(),
-		})
+		recordFn(sh.SetStatus(TxStatusPending).SetActions(transferSent).Out())
 		tx, err := args.Sender.SendTransaction(ctx, transaction, client)
 		if err != nil {
-			recordFn(SwapHistory{
-				Actions: transferSent,
-				Status:  TxStatusFailed.String(),
-			})
-			return *result, errors.Wrap(err, "send transaction error")
+			recordFn(sh.SetStatus(TxStatusFailed).SetActions(transferSent).Out(), err)
+			return sr.SetStatus(TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "send transaction error")
 		}
-		recordFn(SwapHistory{
-			Actions: transferSent,
-			Status:  TxStatusSuccess.String(),
-			Tx:      tx.Hex(),
-		})
+		sh = sh.SetTx(tx.Hex())
+		sr = sr.SetTx(tx.Hex()).SetOrderId(tx.Hex())
+		recordFn(sh.SetActions(transferSent).SetStatus(TxStatusSuccess).Out())
 		txHash = tx.Hex()
 	}
 
 	if txHash == "" {
-		return *result, errors.New("tx is empty")
+		err := errors.New("tx is empty")
+		return sr.SetStatus(TxStatusFailed).SetError(err).Out(), err
 	}
 	log.Debugf("waiting for tx %s", txHash)
 	err := args.Sender.WaitTransaction(ctx, common.HexToHash(txHash), client)
 	if err != nil {
-		recordFn(SwapHistory{
-			Actions: transferReceived,
-			Status:  TxStatusFailed.String(),
-			Tx:      txHash,
-		})
-		return *result, errors.Wrap(err, "wait for tx error")
+		recordFn(sh.SetStatus(TxStatusFailed).SetActions(transferReceived).Out(), err)
+		return sr.SetStatus(TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait for tx error")
 	}
-	result.Tx = txHash
-	result.OrderId = txHash
-	result.Status = TxStatusSuccess
-	recordFn(SwapHistory{
-		Actions: transferReceived,
-		Status:  TxStatusSuccess.String(),
-		Tx:      txHash,
-	})
-	return *result, nil
+	recordFn(sh.SetStatus(TxStatusSuccess).SetActions(transferReceived).Out())
+	return sr.SetStatus(TxStatusSuccess).SetReciever(args.Receiver).SetCurrentChain(args.TargetChain).Out(), nil
 }
 
 type GetTokenCrossChainProvidersParams struct {
@@ -182,10 +181,12 @@ func GetTokenCrossChainProviders(ctx context.Context, args GetTokenCrossChainPro
 }
 
 type WithNotifyParams struct {
+	OrderId                                                      uint
 	Receiver                                                     common.Address
 	TokenIn, TokenOut, TokenInChain, TokenOutChain, ProviderName string
 	TokenInAmount, TokenOutAmount                                decimal.Decimal
 	TransactionType                                              TransactionType
+	CurrentBalance                                               decimal.Decimal
 }
 
 func WithNotify(ctx context.Context, args WithNotifyParams) context.Context {
@@ -203,6 +204,10 @@ func WithNotify(ctx context.Context, args WithNotifyParams) context.Context {
 		}
 	}
 
+	if args.OrderId != 0 {
+		fields["orderId"] = fmt.Sprintf("%d", args.OrderId)
+	}
+
 	if args.TokenOut != "" {
 		fields["tokenOut"] = args.TokenOut
 		if !args.TokenOutAmount.IsZero() {
@@ -215,6 +220,9 @@ func WithNotify(ctx context.Context, args WithNotifyParams) context.Context {
 
 	if args.Receiver.Cmp(constant.ZeroAddress) != 0 {
 		fields["receiver"] = args.Receiver.Hex()
+	}
+	if args.CurrentBalance.GreaterThan(decimal.Zero) {
+		fields["currentBalance"] = fmt.Sprintf("%s %s", args.CurrentBalance, args.TokenOut)
 	}
 	return notice.WithFields(ctx, fields)
 }

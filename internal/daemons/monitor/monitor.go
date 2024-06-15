@@ -8,6 +8,7 @@ import (
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
 	"omni-balance/utils/configs"
+	"omni-balance/utils/provider"
 	"omni-balance/utils/wallet_monitor"
 	"time"
 )
@@ -41,7 +42,7 @@ func Run(ctx context.Context, conf configs.Config) error {
 
 func getExistingBuyTokens() ([]*models.Order, error) {
 	var existBuyTokens []*models.Order
-	err := db.DB().Where("status != ? ", models.OrderStatusSuccess).Find(&existBuyTokens).Error
+	err := db.DB().Where("status != ? ", provider.TxStatusSuccess).Find(&existBuyTokens).Error
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +88,7 @@ func createOrder(result []wallet_monitor.Result, conf configs.Config) error {
 					TargetChainName: v.ChainName,
 					CurrentBalance:  v.TokenBalance,
 					Amount:          v.Amount,
-					Status:          models.OrderStatusWait,
+					Status:          provider.TxStatusPending,
 				})
 			}
 		}

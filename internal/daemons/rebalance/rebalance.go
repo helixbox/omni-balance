@@ -42,14 +42,21 @@ func Run(ctx context.Context, conf configs.Config) error {
 	}
 	var w sync.WaitGroup
 	for index := range orders {
+		if utils.InArray(orders[index].Status.String(), []string{models.OrderStatusWaitCrossChain.String()}) {
+			continue
+		}
+		if orders[index].HasLocked() {
+			logrus.Debugf("order #%d has locked, skip", orders[index].ID)
+			continue
+		}
 		w.Add(1)
 		go func(order *models.Order) {
+			defer utils.Recover()
 			defer w.Done()
 			log := order.GetLogs()
 			subCtx, cancel := context.WithCancel(utils.SetLogToCtx(ctx, log))
 			defer cancel()
-
-			go func() {
+			utils.Go(func() {
 				defer cancel()
 				var t = time.NewTicker(time.Second * 5)
 				defer t.Stop()
@@ -67,22 +74,30 @@ func Run(ctx context.Context, conf configs.Config) error {
 						}
 					}
 				}
-			}()
+			})
+
 			if err := reBalance(subCtx, order, conf); err != nil {
 				log.Errorf("reBalance order #%d error: %s", order.ID, err)
 				return
 			}
-			err = notice.Send(ctx,
-				fmt.Sprintf("rebalance order #%d success", order.ID),
-				fmt.Sprintf("rebalance %s %s from %s to %s use %s %s success",
-					order.TokenInName, order.Amount, order.SourceChainName, order.TargetChainName,
+			order = models.GetOrder(ctx, db.DB(), order.ID)
+
+			err = notice.Send(
+				provider.WithNotify(ctx, provider.WithNotifyParams{
+					OrderId:        order.ID,
+					Receiver:       common.HexToAddress(order.Wallet),
+					CurrentBalance: order.CurrentBalance,
+				}),
+				fmt.Sprintf("rebalance %s on %s success", order.TokenOutName, order.TargetChainName),
+				fmt.Sprintf("rebalance %s %s from %s to %s use %s %s",
+					order.TokenOutName, order.Amount, order.SourceChainName, order.TargetChainName,
 					order.ProviderName, order.ProviderType),
 				logrus.InfoLevel,
 			)
 			if err != nil {
 				log.Debugf("notice error: %s", err)
 			}
-			log.Debugf("reBalance order #%d success", order.ID)
+			log.Infof("reBalance order #%d success", order.ID)
 		}(orders[index])
 	}
 	w.Wait()
@@ -90,9 +105,11 @@ func Run(ctx context.Context, conf configs.Config) error {
 }
 
 func transfer(ctx context.Context, order *models.Order, args provider.SwapParams,
-	conf configs.Config, setWaitTransfer bool, client simulated.Client) (bool, error) {
+	conf configs.Config, client simulated.Client) (bool, error) {
 	ctx = context.WithValue(ctx, constant.ChainNameKeyInCtx, order.TargetChainName)
-
+	if order.Status != models.OrderStatusWaitTransferFromOperator {
+		return false, errors.Errorf("order #%d status is %s, not wait transfer from operator", order.ID, order.Status)
+	}
 	result, err := provider.Transfer(ctx, conf, args, client)
 	if errors.Is(err, error_types.ErrNativeTokenInsufficient) ||
 		errors.Is(err, error_types.ErrWalletLocked) ||
@@ -100,7 +117,7 @@ func transfer(ctx context.Context, order *models.Order, args provider.SwapParams
 		return true, errors.Wrap(err, "transfer error")
 	}
 	if err == nil {
-		return true, createUpdateLog(ctx, order, result, conf, setWaitTransfer, client)
+		return true, createUpdateLog(ctx, order, result, conf, client)
 	}
 	if !errors.Is(errors.Unwrap(err), error_types.ErrInsufficientBalance) &&
 		!errors.Is(errors.Unwrap(err), error_types.ErrInsufficientLiquidity) && err != nil {
@@ -128,15 +145,15 @@ func reBalance(ctx context.Context, order *models.Order, conf configs.Config) er
 		return errors.Wrap(err, "new evm client error")
 	}
 	defer client.Close()
-	if wallet.IsDifferentAddress() {
-		ok, err := transfer(ctx, order, args, conf, false, client)
+	if wallet.IsDifferentAddress() || order.Status == models.OrderStatusWaitTransferFromOperator {
+		ok, err := transfer(ctx, order, args, conf, client)
 		if err != nil && ok {
 			return errors.Wrap(err, "transfer error")
 		}
 		if ok {
 			return nil
 		}
-		log.Debugf("cannot use transfer, try other providers.")
+		log.Infof("cannot use transfer, try other providers.")
 	}
 
 	balance, err := wallet.GetExternalBalance(ctx, common.HexToAddress(token.ContractAddress), token.Decimals, client)
@@ -172,27 +189,35 @@ func reBalance(ctx context.Context, order *models.Order, conf configs.Config) er
 
 	log.Infof("start reBalance #%d %s on %s use %s provider", order.ID, order.TokenOutName,
 		order.TargetChainName, providerObj.Name())
-	result, err := providerObj.Swap(ctx, args)
-	if err != nil {
-		return errors.Wrapf(err, "reBalance %s on %s error", order.TokenOutName, providerObj.Name())
-	}
+	result, providerErr := providerObj.Swap(ctx, args)
 	if result.Status == "" {
 		return errors.New("the result status is empty")
 	}
-	if err := createUpdateLog(ctx, order, result, conf, true, client); err != nil {
+	if result.CurrentChain != args.TargetChain {
+		result.Status = models.OrderStatusWaitCrossChain
+	}
+	if err := createUpdateLog(ctx, order, result, conf, client); err != nil {
 		return errors.Wrap(err, "create update log error")
 	}
-
-	_, err = transfer(ctx, order, args, conf, false, client)
-	if err != nil {
-		return errors.Wrap(err, "transfer error")
+	if providerErr != nil {
+		return errors.Wrap(providerErr, "provider error")
+	}
+	if args.Receiver != result.Receiver && result.Receiver != "" {
+		order = models.GetOrder(ctx, db.DB(), order.ID)
+		if order == nil {
+			return errors.New("order not found")
+		}
+		_, err = transfer(ctx, order, daemons.CreateSwapParams(*order, orderProcess, log, conf.GetWallet(order.Wallet)), conf, client)
+		if err != nil {
+			return errors.Wrap(err, "transfer error")
+		}
 	}
 	return nil
 }
 
 func listOrders(_ context.Context) ([]*models.Order, error) {
 	var orders []*models.Order
-	err := db.DB().Where("status != ?", models.OrderStatusSuccess).Find(&orders).Error
+	err := db.DB().Where("status != ?", provider.TxStatusSuccess).Find(&orders).Error
 	if err != nil {
 		return nil, errors.Wrap(err, "find buy tokens error")
 	}
@@ -200,7 +225,7 @@ func listOrders(_ context.Context) ([]*models.Order, error) {
 }
 
 func createUpdateLog(ctx context.Context, order *models.Order, result provider.SwapResult, conf configs.Config,
-	setWaitTransfer bool, client simulated.Client) error {
+	client simulated.Client) error {
 
 	wallet := conf.GetWallet(order.Wallet)
 	walletBalance := getWalletTokenBalance(ctx, wallet, order.TokenOutName, order.TargetChainName, conf, client)
@@ -214,23 +239,17 @@ func createUpdateLog(ctx context.Context, order *models.Order, result provider.S
 		Tx:               result.Tx,
 		Order:            result.MarshalOrder(),
 		Error:            result.Error,
+		Status:           result.Status,
 	}
 	log := utils.GetLogFromCtx(ctx).WithFields(logrus.Fields{
 		"order_id": order.ID,
-		"status":   result.Status,
+		"result":   utils.ToMap(result),
 	})
-	switch result.Status {
-	case provider.TxStatusSuccess:
-		updateOrder.Status = models.OrderStatusSuccess
-		if setWaitTransfer && wallet.IsDifferentAddress() {
-			updateOrder.Status = models.OrderStatusWaitTransferFromOperator
-		}
-	default:
-		updateOrder.Status = models.OrderStatus(result.Status)
-		if result.Status == "" {
-			updateOrder.Status = models.OrderStatusUnknown
-		}
-
+	if result.Status == provider.TxStatusSuccess &&
+		wallet.IsDifferentAddress() &&
+		result.Receiver != order.Wallet &&
+		result.Receiver != "" {
+		updateOrder.Status = provider.TxStatus(models.OrderStatusWaitTransferFromOperator)
 	}
 	log.Debugf("order status is %v", updateOrder.Status)
 	return db.DB().Model(&models.Order{}).Where("id = ?", order.ID).Limit(1).Updates(updateOrder).Error
@@ -255,6 +274,7 @@ func getWalletTokenBalance(ctx context.Context, wallet wallets.Wallets, tokenNam
 func getReBalanceProvider(ctx context.Context, order models.Order, conf configs.Config) (provider.Provider, error) {
 	log := order.GetLogs()
 	if order.ProviderType != "" && order.ProviderName != "" {
+		log.Debugf("provider type is %s, provider name is %s", order.ProviderType, order.ProviderName)
 		fn, err := provider.GetProvider(order.ProviderType, order.ProviderName)
 		if err != nil {
 			return nil, errors.Wrap(err, "get provider error")

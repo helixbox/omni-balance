@@ -13,7 +13,6 @@ import (
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/provider"
 	"omni-balance/utils/wallets"
-	"strings"
 	"time"
 )
 
@@ -175,19 +174,36 @@ func (b *Bridge) Swap(ctx context.Context, args provider.SwapParams) (result pro
 		args.SourceToken = b.config.GetTokenInfoOnChain(args.TargetToken, args.SourceChain).Name
 	}
 	sourceToken := b.config.GetTokenInfoOnChain(args.SourceToken, args.SourceChain)
-
 	targetChainConf := b.config.GetChainConfig(args.TargetChain)
+
+	sr := new(provider.SwapResult).
+		SetTokenInName(args.SourceToken).
+		SetTokenInChainName(args.SourceChain).
+		SetProviderName(b.Name()).
+		SetProviderType(b.Type()).
+		SetCurrentChain(args.SourceChain).
+		SetTx(args.LastHistory.Tx)
+	sh := &provider.SwapHistory{
+		ProviderName: b.Name(),
+		ProviderType: string(b.Type()),
+		Amount:       args.Amount,
+		CurrentChain: args.SourceChain,
+		Tx:           history.Tx,
+	}
+	isActionSuccess := history.Status == string(provider.TxStatusSuccess)
 
 	fn := BRIDGE_DIRECTION[int64(sourceChainConf.Id)][int64(targetChainConf.Id)]
 	if fn == nil {
-		return result, errors.Errorf("not support swap %s to %s", args.SourceChain, args.TargetChain)
+		err = errors.Errorf("not support swap %s to %s", args.SourceChain, args.TargetChain)
+		return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), err
 	}
 	wallet := args.Sender
 	ethClient, err := chains.NewTryClient(ctx, sourceChainConf.RpcEndpoints)
 	if err != nil {
-		return result, errors.Wrap(err, "dial rpc")
+		return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "dial rpc")
 	}
 	defer ethClient.Close()
+
 	log.Debugf("start transfer %s from %s to %s", args.SourceToken, args.SourceChain, args.TargetChain)
 	tx, err := fn(ctx, SwapParams{
 		Sender:    wallet,
@@ -197,25 +213,18 @@ func (b *Bridge) Swap(ctx context.Context, args provider.SwapParams) (result pro
 		Client:    ethClient,
 	})
 	if err != nil {
-		return result, errors.Wrap(err, "swap")
+		return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "swap")
 	}
 
 	if tx.Gas != 0 {
 		tx.Gas = tx.Gas * 2
 	}
 
-	sr := &provider.SwapResult{
-		TokenInName:  args.SourceToken,
-		ProviderType: configs.Bridge,
-		ProviderName: b.Name(),
-		Status:       provider.TxStatusPending,
-		CurrentChain: args.SourceChain,
-	}
-
-	if actionNumber <= 1 && history.Status != string(provider.TxStatusSuccess) {
-		recordFn(provider.SwapHistory{Actions: sourceChainSendingAction, Status: string(provider.TxStatusPending),
-			CurrentChain: args.SourceChain})
+	if actionNumber <= 1 && !isActionSuccess {
+		recordFn(sh.SetActions(sourceChainSendingAction).SetStatus(provider.TxStatusPending).Out())
+		sr = sr.SetReciever(args.Receiver)
 		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
+			OrderId:         args.OrderId,
 			Receiver:        common.HexToAddress(args.Receiver),
 			TokenIn:         args.SourceToken,
 			TokenOut:        args.TargetToken,
@@ -229,68 +238,52 @@ func (b *Bridge) Swap(ctx context.Context, args provider.SwapParams) (result pro
 
 		txHash, err := args.Sender.SendTransaction(ctx, tx, ethClient)
 		if err != nil {
-			recordFn(provider.SwapHistory{Actions: sourceChainSendingAction, Status: string(provider.TxStatusFailed),
-				CurrentChain: args.SourceChain}, err)
-			return result, errors.Wrap(err, "send signed transaction")
+			recordFn(sh.SetActions(sourceChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "send signed transaction")
 		}
-		recordFn(provider.SwapHistory{Actions: sourceChainSendingAction, Status: string(provider.TxStatusSuccess),
-			CurrentChain: args.SourceChain, Tx: txHash.Hex()})
-		sr.Tx = txHash.Hex()
-		sr.OrderId = sr.Tx
+		recordFn(sh.SetActions(sourceChainSendingAction).SetStatus(provider.TxStatusSuccess).Out())
+		sh = sh.SetTx(txHash.Hex())
+		sr = sr.SetTx(txHash.Hex()).SetOrderId(txHash.Hex())
 	}
 
-	if actionNumber <= 2 && history.Status != string(provider.TxStatusSuccess) {
-		if sr.Tx == "" {
-			sr.Tx = history.Tx
-		}
-		recordFn(provider.SwapHistory{Actions: sourceChainWaitAction, Status: string(provider.TxStatusPending),
-			CurrentChain: args.SourceChain, Tx: sr.Tx})
+	if actionNumber <= 2 && !isActionSuccess {
+		recordFn(sh.SetActions(sourceChainWaitAction).SetStatus(provider.TxStatusPending).Out())
 		err = wallet.WaitTransaction(ctx, common.HexToHash(sr.Tx), ethClient)
-		if err != nil && strings.Contains(err.Error(), "tx failed") {
-			recordFn(provider.SwapHistory{Actions: sourceChainWaitAction, Status: string(provider.TxStatusFailed),
-				CurrentChain: args.SourceChain, Tx: sr.Tx}, err)
-			return result, err
-		}
 		if err != nil {
-			recordFn(provider.SwapHistory{Actions: sourceChainWaitAction, Status: string(provider.TxStatusPending),
-				CurrentChain: args.SourceChain, Amount: args.Amount, Tx: sr.Tx}, err)
-			return result, errors.Wrap(err, "wait for tx")
+			recordFn(sh.SetActions(sourceChainWaitAction).SetStatus(provider.TxStatusPending).Out(), err)
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait for tx")
 		}
-		recordFn(provider.SwapHistory{Actions: sourceChainWaitAction, Status: string(provider.TxStatusSuccess),
-			CurrentChain: args.SourceChain, Tx: sr.Tx})
+		recordFn(sh.SetActions(sourceChainWaitAction).SetStatus(provider.TxStatusSuccess).Out())
 	}
 
-	if actionNumber <= 4 && history.Status != string(provider.TxStatusSuccess) {
-		if sr.Tx == "" {
-			sr.Tx = history.Tx
-		}
-		recordFn(provider.SwapHistory{Actions: targetChainSendingAction, Status: string(provider.TxStatusPending),
-			CurrentChain: args.SourceChain, Tx: sr.Tx})
+	if actionNumber <= 4 && !isActionSuccess {
+		recordFn(sh.SetActions(targetChainSendingAction).SetStatus(provider.TxStatusPending).Out())
 		log.Debugf("waiting for bridge success")
-		record, err := b.WaitForBridgeSuccess(ctx, sr.Tx, args.Sender.GetAddress(true).Hex())
+		tx, err := wallet.GetRealHash(ctx, common.HexToHash(sr.Tx), ethClient)
 		if err != nil {
-			recordFn(provider.SwapHistory{Actions: targetChainSendingAction, Status: string(provider.TxStatusFailed),
-				CurrentChain: args.SourceChain, Tx: sr.Tx}, err)
-			return *sr, errors.Wrap(err, "wait for bridge success")
+			recordFn(sh.SetActions(targetChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "get real tx hash")
 		}
-		sr.Order = record
+
+		record, err := b.WaitForBridgeSuccess(ctx, tx.Hex(), args.Sender.GetAddress(true).Hex())
+		if err != nil {
+			recordFn(sh.SetActions(targetChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait for bridge success")
+		}
+		sr.SetOrder(record)
 
 		if record.Result == 3 {
-			recordFn(provider.SwapHistory{Actions: targetChainReceivedAction, Status: string(provider.TxStatusSuccess),
-				CurrentChain: args.TargetChain, Tx: sr.Tx})
-			sr.Status = provider.TxStatusSuccess
-			sr.CurrentChain = args.TargetChain
+			recordFn(sh.SetActions(targetChainReceivedAction).SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetToken).Out())
+			sr = sr.SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain)
 		}
 		if record.Result != 3 {
 			log.Debugf("bridge failed: %+v", record)
-			recordFn(provider.SwapHistory{Actions: targetChainReceivedAction,
-				Status: string(provider.TxStatusFailed), CurrentChain: args.SourceChain, Tx: sr.Tx},
-				errors.Errorf("bridge failed: %d", record.Result))
-			sr.Status = provider.TxStatusFailed
+			err := errors.Errorf("bridge failed: %d", record.Result)
+			recordFn(sh.SetActions(targetChainReceivedAction).SetStatus(provider.TxStatusSuccess).Out(), err)
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), err
 		}
 	}
-
-	return *sr, nil
+	return sr.SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain).Out(), nil
 }
 
 func (b *Bridge) Check(ctx context.Context, args provider.CheckParams) (bool, error) {

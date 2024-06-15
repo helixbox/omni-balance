@@ -29,6 +29,7 @@ type Wallets interface {
 	GetNonce(ctx context.Context, client simulated.Client) (uint64, error)
 	SendTransaction(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error)
 	WaitTransaction(ctx context.Context, txHash common.Hash, client simulated.Client) error
+	GetRealHash(ctx context.Context, txHash common.Hash, client simulated.Client) (common.Hash, error)
 }
 
 type WalletConfig struct {

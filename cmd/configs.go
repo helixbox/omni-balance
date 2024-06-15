@@ -14,6 +14,7 @@ import (
 	"omni-balance/internal/daemons"
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
+	"omni-balance/utils"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/constant"
 	"os"
@@ -70,11 +71,11 @@ func startHttpServer(_ context.Context, port string) error {
 		Addr:    port,
 		Handler: http.DefaultServeMux,
 	}
-	go func() {
+	utils.Go(func() {
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logrus.Panic(err)
+			logrus.Fatalf("http server error: %s", err)
 		}
-	}()
+	})
 	logrus.Infof("http server started on %s", port)
 	return nil
 }

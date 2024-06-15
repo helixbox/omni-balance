@@ -204,3 +204,20 @@ func HexToString(v string) string {
 	i, _ := new(big.Int).SetString(strings.TrimPrefix(v, "0x"), 16)
 	return i.String()
 }
+
+func Go(f func()) {
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				logrus.Errorf("panic: %s", err)
+			}
+		}()
+		f()
+	}()
+}
+
+func Recover() {
+	if err := recover(); err != nil {
+		logrus.Errorf("panic: %s", err)
+	}
+}

@@ -21,24 +21,7 @@ var (
 	PurchasedAction   = "purchased"
 	WithdrawingAction = "withdrawing"
 	WithdrawnAction   = "withdrawn"
-
-	successStatus = "success"
-	pendingStatus = "pending"
-	failStatus    = "fail"
 )
-
-func StatusToInt(status string) int {
-	switch status {
-	case successStatus:
-		return 3
-	case pendingStatus:
-		return 1
-	case failStatus:
-		return 2
-	default:
-		return 0
-	}
-}
 
 func Action2Int(action string) int {
 	switch action {
@@ -163,43 +146,52 @@ func (g *Gate) Swap(ctx context.Context, args provider.SwapParams) (provider.Swa
 			tokenIn.TokenName, tokenInAccount.Available, tokenIn.CostAmount)
 	}
 
-	var result = &provider.SwapResult{
-		ProviderType: g.Type(),
-		ProviderName: g.Name(),
-		TokenInName:  tokenIn.TokenName,
-		OrderId:      args.LastHistory.Tx,
-	}
+	var (
+		sr = new(provider.SwapResult).
+			SetTokenInName(args.SourceToken).
+			SetTokenInChainName(args.SourceChain).
+			SetProviderName(g.Name()).
+			SetProviderType(g.Type()).
+			SetCurrentChain(args.SourceChain).
+			SetTx(args.LastHistory.Tx).
+			SetReciever(wallet.GetAddress(true).Hex())
+		sh = &provider.SwapHistory{
+			ProviderName: g.Name(),
+			ProviderType: string(g.Type()),
+			Amount:       args.Amount,
+			CurrentChain: args.SourceChain,
+			Tx:           args.LastHistory.Tx,
+		}
+		isActionSuccess = args.LastHistory.Status == provider.TxStatusSuccess.String()
+	)
 
-	if buyAmount.GreaterThan(decimal.Zero) && actionNumber <= 1 && StatusToInt(args.LastHistory.Status) <= 2 { // buy token
-		recordFn(provider.SwapHistory{Actions: PurchasingAction, Status: pendingStatus})
+	if buyAmount.GreaterThan(decimal.Zero) && actionNumber <= 1 && !isActionSuccess { // buy token
+		recordFn(sh.SetActions(PurchasedAction).SetStatus(provider.TxStatusPending).Out())
 		order, err := g.buyToken(ctx, tokenIn, args.TargetToken, buyAmount.Abs(), func(order gateapi.Order) bool {
 			logrus.Debugf("wait for order %s filled, the status is %s", order.Id, order.Status)
 			return false
 		})
 		if err != nil {
-			recordFn(provider.SwapHistory{Actions: PurchasingAction, Status: failStatus}, err)
-			return provider.SwapResult{}, err
+			recordFn(sh.SetActions(PurchasedAction).SetStatus(provider.TxStatusFailed).Out(), err)
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), err
 		}
-		result.Order = order
-		result.OrderId = order.Id
-		recordFn(provider.SwapHistory{Actions: PurchasedAction, Status: successStatus, Tx: result.OrderId})
+		sr = sr.SetOrderId(order.Id).SetOrder(order)
+		sh = sh.SetTx(order.Id)
+		recordFn(sh.SetActions(PurchasedAction).SetStatus(provider.TxStatusSuccess).Out())
 	}
 
-	// 提现
 	var withdrawOrderId = args.LastHistory.Tx
 
-	if actionNumber < 4 && StatusToInt(args.LastHistory.Status) <= 2 {
+	if actionNumber < 4 && !isActionSuccess {
 		balance, _ := decimal.NewFromString(tokenOutAccount.Available)
 		if balance.LessThanOrEqual(decimal.Zero) {
 			err = errors.Errorf("not enough %s in spot account", args.TargetToken)
-			recordFn(provider.SwapHistory{
-				Actions: WithdrawingAction, Status: failStatus, CurrentChain: args.SourceChain, Tx: result.OrderId}, err)
-			return provider.SwapResult{}, err
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), err
 		}
 		if balance.LessThanOrEqual(args.Amount) {
 			args.Amount = balance
 		}
-		recordFn(provider.SwapHistory{Actions: WithdrawingAction, Status: pendingStatus, Tx: result.OrderId})
+		recordFn(sh.SetActions(WithdrawingAction).SetStatus(provider.TxStatusPending).Out())
 		withdrawOrder, _, err := g.client.WithdrawalApi.Withdraw(ctx, gateapi.LedgerRecord{
 			Amount:   args.Amount.String(),
 			Currency: args.TargetToken,
@@ -207,12 +199,14 @@ func (g *Gate) Swap(ctx context.Context, args provider.SwapParams) (provider.Swa
 			Chain:    ChainName2GateChainName(args.TargetChain),
 		})
 		if err != nil {
-			recordFn(provider.SwapHistory{Actions: WithdrawingAction, Status: failStatus, CurrentChain: args.SourceChain, Tx: result.OrderId}, err)
-			return provider.SwapResult{}, errors.Wrap(err, "withdraw")
+			recordFn(sh.SetActions(WithdrawingAction).SetStatus(provider.TxStatusFailed).Out(), err)
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "withdraw")
 		}
 		withdrawOrderId = withdrawOrder.Id
-		result.Order = withdrawOrder
-		recordFn(provider.SwapHistory{Actions: WithdrawnAction, Status: pendingStatus, CurrentChain: args.SourceChain, Tx: withdrawOrder.Id})
+
+		sr = sr.SetOrder(withdrawOrder).SetOrderId(withdrawOrderId).SetTx(withdrawOrderId)
+		sh = sh.SetTx(withdrawOrderId)
+		recordFn(sh.SetActions(WithdrawnAction).SetStatus(provider.TxStatusPending).Out())
 	}
 
 	for {
@@ -221,10 +215,11 @@ func (g *Gate) Swap(ctx context.Context, args provider.SwapParams) (provider.Swa
 			Currency: optional.NewString(args.TargetToken),
 		})
 		if err != nil {
-			return *result, errors.Wrap(err, "list withdraw status")
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "list withdraw status")
 		}
 		if len(withdrawalRecords) == 0 {
-			return *result, errors.Errorf("withdraw order not found")
+			err = errors.Errorf("withdraw order not found")
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), err
 		}
 		var withdrawalRecord gateapi.WithdrawalRecord
 		for index, v := range withdrawalRecords {
@@ -240,35 +235,31 @@ func (g *Gate) Swap(ctx context.Context, args provider.SwapParams) (provider.Swa
 			}
 		}
 		if withdrawalRecord.Status == "" {
-			return *result, errors.Errorf("withdraw order not found")
+			err = errors.Errorf("withdraw order not found")
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), err
 		}
+		log.Infof("withdraw status: %s, wait for done", withdrawalRecord.Status)
 		switch strings.ToUpper(withdrawalRecord.Status) {
 		case "DONE":
-			recordFn(provider.SwapHistory{Actions: WithdrawnAction, Status: successStatus, CurrentChain: args.TargetChain, Tx: withdrawalRecord.Txid})
-			result.Tx = withdrawalRecord.Txid
-			result.Status = provider.TxStatusSuccess
-			result.CurrentChain = args.TargetChain
-			result.OrderId = withdrawalRecord.Id
-			result.Order = withdrawalRecord
+			recordFn(sh.SetActions(WithdrawingAction).SetStatus(provider.TxStatusSuccess).SetCurrentChain(withdrawalRecord.Chain).Out())
+			sr.SetCurrentChain(withdrawalRecord.Chain).
+				SetStatus(provider.TxStatusSuccess).
+				SetTx(withdrawalRecord.Txid).
+				SetOrderId(withdrawalRecord.Id).
+				SetOrder(withdrawalRecord)
 			log.Infof("withdraw done, txid: %s", withdrawalRecord.Txid)
-			return *result, nil
+			return sr.Out(), nil
 		case "CANCEL", "FAIL":
-			recordFn(provider.SwapHistory{
-				Actions:      WithdrawnAction,
-				Status:       failStatus,
-				CurrentChain: args.SourceChain,
-				Tx:           withdrawalRecord.Id})
-			return *result, errors.Errorf("withdraw failed, status: %s", withdrawalRecord.Status)
+			err := errors.Errorf("withdraw failed, status: %s", withdrawalRecord.Status)
+			recordFn(sh.SetStatus(provider.TxStatusFailed).SetActions(WithdrawingAction).Out(), err)
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), err
 		case "REQUEST", "BCODE", "EXTPEND", "VERIFY", "PROCES", "PEND", "LOCKED":
 			time.Sleep(time.Second)
 			continue
 		default:
-			recordFn(provider.SwapHistory{
-				Actions:      WithdrawnAction,
-				Status:       failStatus,
-				CurrentChain: args.SourceChain,
-				Tx:           withdrawalRecord.Txid})
-			return *result, errors.Errorf("unknown status: %+v", withdrawalRecord)
+			err = errors.Errorf("unknown status: %+v", withdrawalRecord.Status)
+			recordFn(sh.SetStatus(provider.TxStatusFailed).SetActions(WithdrawingAction).Out(), err)
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), err
 		}
 	}
 }

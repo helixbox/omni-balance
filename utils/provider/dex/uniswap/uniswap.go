@@ -126,11 +126,31 @@ func (u *Uniswap) Swap(ctx context.Context, args provider.SwapParams) (result pr
 	}
 	defer ethClient.Close()
 
-	if !isTokenInNative && actionNumber <= 0 && args.LastHistory.Status != provider.TxStatusSuccess.String() {
+	var (
+		sr = new(provider.SwapResult).
+			SetTokenInName(args.SourceToken).
+			SetTokenInChainName(args.SourceChain).
+			SetProviderName(u.Name()).
+			SetProviderType(u.Type()).
+			SetCurrentChain(args.SourceChain).
+			SetTx(args.LastHistory.Tx).
+			SetReciever(wallet.GetAddress(true).Hex())
+		sh = &provider.SwapHistory{
+			ProviderName: u.Name(),
+			ProviderType: string(u.Type()),
+			Amount:       args.Amount,
+			CurrentChain: args.SourceChain,
+			Tx:           args.LastHistory.Tx,
+		}
+		isActionSuccess = args.LastHistory.Status == provider.TxStatusSuccess.String()
+	)
+
+	if !isTokenInNative && actionNumber <= 0 && isActionSuccess {
 		// uint256 MAX see https://docs.uniswap.org/contracts/permit2/overview
 		amount := decimal.RequireFromString("115792089237316195423570985008687907853269984665640564039457584007913129639935")
 		log.Debugf("approve tokenIn amount: %s", amount)
 		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
+			OrderId:         args.OrderId,
 			TokenIn:         tokenIn.Name,
 			TokenOut:        args.TargetToken,
 			TokenInChain:    args.TargetChain,
@@ -150,7 +170,7 @@ func (u *Uniswap) Swap(ctx context.Context, args provider.SwapParams) (result pr
 			AmountWei:       amount,
 			Client:          ethClient,
 		}); err != nil {
-			return provider.SwapResult{}, err
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), err
 		}
 	}
 
@@ -166,8 +186,9 @@ func (u *Uniswap) Swap(ctx context.Context, args provider.SwapParams) (result pr
 		Amount:   args.Amount,
 	})
 	if err != nil {
-		return provider.SwapResult{}, err
+		return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), err
 	}
+	sr = sr.SetOrder(common.Bytes2Hex(txRawData))
 
 	var value = decimal.Zero
 	if isTokenInNative {
@@ -181,47 +202,38 @@ func (u *Uniswap) Swap(ctx context.Context, args provider.SwapParams) (result pr
 		Data:     txRawData,
 		Value:    value.BigInt(),
 	}
-	swapResult := &provider.SwapResult{
-		ProviderType: u.Type(),
-		ProviderName: u.Name(),
-		Order:        quote.Quote,
-		CurrentChain: chain.Name,
-		TokenInName:  tokenIn.Name,
-	}
 	log.WithField("txData", utils.ToMap(txData)).Debug("build tx success")
 	var tx = args.LastHistory.Tx
-	if actionNumber <= 1 && args.LastHistory.Status != provider.TxStatusSuccess.String() {
-		recordFn(provider.SwapHistory{Actions: SwapTXSendingAction, Status: string(provider.TxStatusPending), CurrentChain: chain.Name})
+	if actionNumber <= 1 && !isActionSuccess {
+		recordFn(sh.SetStatus(provider.TxStatusPending).SetActions(SwapTXSendingAction).Out())
 		log.Debug("sending tx")
 		txHash, err := wallet.SendTransaction(ctx, txData, ethClient)
 		if err != nil {
-			swapResult.Status = provider.TxStatusFailed
-			swapResult.Error = err.Error()
-			args.RecordFn(provider.SwapHistory{Actions: SwapTXSendingAction, Status: string(provider.TxStatusFailed), CurrentChain: chain.Name, Amount: args.Amount})
-			return *swapResult, errors.Wrap(err, "send tx")
+			recordFn(sh.SetStatus(provider.TxStatusFailed).SetActions(SwapTXSendingAction).Out(), err)
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "send tx")
 		}
 		tx = txHash.Hex()
+		sr = sr.SetTx(tx).SetOrderId(tx)
+		sh = sh.SetTx(tx)
+
 		log.WithField("txHash", tx).Debug("send tx success")
-		recordFn(provider.SwapHistory{Actions: SwapTXSendingAction, Status: string(provider.TxStatusPending), CurrentChain: chain.Name, Tx: tx})
+		recordFn(sh.SetActions(SwapTXSendingAction).SetStatus(provider.TxStatusSuccess).Out())
 	}
 	if tx == "" {
-		return provider.SwapResult{}, errors.New("tx is empty")
+		err := errors.New("tx is empty")
+		recordFn(sh.SetStatus(provider.TxStatusFailed).SetActions(SwapTXSendingAction).Out(), err)
+		return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), err
 	}
-	swapResult.Tx = tx
-	swapResult.OrderId = tx
-	if actionNumber <= 2 && args.LastHistory.Status != provider.TxStatusSuccess.String() {
+	if actionNumber <= 2 && !isActionSuccess {
 		log.Debug("waiting tx")
 		if err := wallet.WaitTransaction(ctx, common.HexToHash(tx), ethClient); err != nil {
-			recordFn(provider.SwapHistory{Actions: SwapTXReceivedAction, Status: string(provider.TxStatusFailed), CurrentChain: args.SourceChain, Tx: tx})
-			swapResult.Status = provider.TxStatusFailed
-			swapResult.Error = err.Error()
-			return *swapResult, err
+			recordFn(sh.SetStatus(provider.TxStatusFailed).SetActions(SwapTXReceivedAction).Out(), err)
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), err
 		}
-		swapResult.Status = provider.TxStatusSuccess
-		recordFn(provider.SwapHistory{Actions: SwapTXReceivedAction, Status: string(provider.TxStatusSuccess), CurrentChain: chain.Name, Tx: tx})
+		recordFn(sh.SetStatus(provider.TxStatusSuccess).SetActions(SwapTXReceivedAction).Out())
 	}
 	log.Debug("tx success")
-	return *swapResult, nil
+	return sr.SetStatus(provider.TxStatusSuccess).Out(), nil
 }
 
 func (u *Uniswap) Help() []string {

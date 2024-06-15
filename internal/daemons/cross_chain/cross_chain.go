@@ -7,6 +7,7 @@ import (
 	"omni-balance/internal/daemons"
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
+	"omni-balance/utils"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/provider"
 	"sync"
@@ -43,10 +44,12 @@ func processOrders(ctx context.Context, conf configs.Config, orders []*models.Or
 	var w sync.WaitGroup
 	for _, order := range orders {
 		w.Add(1)
+
 		go func(order *models.Order) {
+			defer utils.Recover()
 			defer w.Done()
 			log := order.GetLogs()
-			if err := start(ctx, order, conf, log.WithField("order_id", order.ID)); err != nil {
+			if err := start(utils.SetLogToCtx(ctx, log), order, conf, log.WithField("order_id", order.ID)); err != nil {
 				log.Errorf("start cross chain error: %s", err)
 			}
 		}(order)
@@ -71,7 +74,10 @@ func start(ctx context.Context, order *models.Order, conf configs.Config, log *l
 	}
 	orderProcess := models.GetLastOrderProcess(ctx, db.DB(), order.ID)
 	swapParams := daemons.CreateSwapParams(*order, orderProcess, log, wallet)
-	result, err := bridge.Swap(ctx, swapParams)
+	if order.CurrentChainName != "" && order.CurrentChainName != swapParams.SourceChain {
+		swapParams.SourceToken = order.CurrentChainName
+	}
+	result, err := bridge.Swap(utils.SetLogToCtx(ctx, order.GetLogs()), swapParams)
 	if err != nil {
 		return errors.Wrap(err, "swap error")
 	}
@@ -83,25 +89,14 @@ func createUpdateLog(order *models.Order, result provider.SwapResult, log *logru
 	update := map[string]interface{}{
 		"error":              result.Error,
 		"current_chain_name": result.CurrentChain,
+		"status":             result.Status,
 	}
-	switch result.Status {
-	case provider.TxStatusSuccess:
-		log.Infof("order #%d token %s cross from %s to %s success", order.ID, order.TokenOutName,
-			order.CurrentChainName, order.TargetChainName)
-		update["status"] = models.OrderStatusSuccess
-	default:
-		update["status"] = evaluateStatus(result)
-		log.Infof("order #%d token %s cross from %s to %s status is %s", order.ID, order.TokenOutName,
-			order.CurrentChainName, order.TargetChainName, result.Status)
-	}
-	return update
-}
-
-func evaluateStatus(result provider.SwapResult) models.OrderStatus {
 	if result.Status == "" {
-		return models.OrderStatusUnknown
+		update["status"] = provider.TxStatusFailed
 	}
-	return models.OrderStatus(result.Status)
+	log.Infof("order #%d token %s cross from %s to %s status is %s", order.ID, order.TokenOutName,
+		order.CurrentChainName, order.TargetChainName, result.Status)
+	return update
 }
 
 func getBridge(ctx context.Context, order *models.Order, conf configs.Config) (provider.Provider, error) {

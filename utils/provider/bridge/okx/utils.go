@@ -236,7 +236,10 @@ func (o *OKX) WaitForTx(ctx context.Context, hash common.Hash, sourceChainId int
 		"chain_id": sourceChainId,
 		"hash":     hash,
 	})
-	var t = time.NewTicker(time.Second * 2)
+	var (
+		t     = time.NewTicker(time.Second * 2)
+		count = 0
+	)
 	defer t.Stop()
 	for {
 		select {
@@ -248,16 +251,20 @@ func (o *OKX) WaitForTx(ctx context.Context, hash common.Hash, sourceChainId int
 				return err
 			}
 			log = log.WithField("okx_ts_status", s.ToMap())
-			log.Debugf("tx status: %s, detail status: %s", s.Status, okxWaitForTxStatus[s.DetailStatus])
+			log.Infof("tx status: %s, detail status: %s", s.Status, okxWaitForTxStatus[s.DetailStatus])
 			switch s.Status {
 			case "PENDING":
+				count = 0
 				continue
 			case "SUCCESS":
 				return nil
 			case "FAILURE", "REFUND":
 				return errors.New(okxWaitForTxStatus[s.DetailStatus])
 			default:
-				return errors.Errorf("unknown status: %s, detail status: %s", s.Status, s.DetailStatus)
+				if count >= 600 {
+					return errors.Errorf("unknown status: %s, detail status: %s", s.Status, s.DetailStatus)
+				}
+				count++
 			}
 		}
 	}

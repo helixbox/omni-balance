@@ -353,7 +353,11 @@ func (c *Config) GetProvidersConfig(name string, providerType LiquidityProviderT
 }
 
 func (c *Config) GetChainConfig(chainName string) Chain {
-	return c.chains[chainName]
+	chain := c.chains[chainName]
+	if chain.Name == "" {
+		logrus.Panicf("chain %s not found", chainName)
+	}
+	return chain
 }
 
 func (c *Config) GetTokenThreshold(wallet, tokenName, chain string) decimal.Decimal {

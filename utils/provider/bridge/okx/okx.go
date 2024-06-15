@@ -138,21 +138,27 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		return provider.SwapResult{}, err
 	}
 	var (
-		result = new(provider.SwapResult).SetTokenInName(tokenIn.Name).
-			SetTokenInChainName(sourceChain.Name).
-			SetProviderType(o.Type()).
+		sr = new(provider.SwapResult).
+			SetTokenInName(tokenIn.Name).
+			SetTokenInChainName(args.SourceChain).
 			SetProviderName(o.Name()).
-			SetStatus(provider.TxStatusPending)
+			SetProviderType(o.Type()).
+			SetCurrentChain(args.SourceChain).
+			SetTx(args.LastHistory.Tx).
+			SetReciever(args.Receiver)
 		sh = &provider.SwapHistory{
 			ProviderName: o.Name(),
 			ProviderType: string(o.Type()),
 			Amount:       args.Amount,
+			CurrentChain: args.SourceChain,
+			Tx:           history.Tx,
 		}
 	)
 
 	if !isTokenInNative && actionNumber <= 1 && !isActionSuccess {
 		log.Debug("the source token is not native token, need approve")
 		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
+			OrderId:         args.OrderId,
 			TokenIn:         tokenIn.Name,
 			TokenOut:        tokenOut.Name,
 			TokenInChain:    args.SourceChain,
@@ -162,15 +168,15 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 			TokenOutAmount:  tokenOutAmount,
 			TransactionType: provider.ApproveTransactionAction,
 		})
+		args.RecordFn(sh.SetStatus(provider.TxStatusPending).SetActions(ApproveTransactionAction).Out())
 		approveTransaction, err := o.approveTransaction(ctx, sourceChain.Id,
 			common.HexToAddress(tokenIn.ContractAddress), tokenInAmountWei)
 		if err != nil {
 			err = errors.Wrap(err, "get approve transaction from okx error")
-			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
+			args.RecordFn(sh.SetStatus(provider.TxStatusFailed).SetActions(ApproveTransactionAction).Out(), err)
+			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
 		}
 		log.Debugf("get approve transaction from okx, the spender is %s", approveTransaction.DexContractAddress)
-		sh = sh.SetActions(ApproveTransactionAction)
-		args.RecordFn(sh.SetStatus(provider.TxStatusPending).Out())
 		err = chains.TokenApprove(ctx, chains.TokenApproveParams{
 			ChainId:         int64(sourceChain.Id),
 			TokenAddress:    common.HexToAddress(tokenIn.ContractAddress),
@@ -183,17 +189,18 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 			Client:    client,
 		})
 		if err != nil {
-			args.RecordFn(sh.SetStatus(provider.TxStatusFailed).Out(), err)
-			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
+			args.RecordFn(sh.SetActions(ApproveTransactionAction).SetStatus(provider.TxStatusFailed).Out(), err)
+			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
 		}
 		log.Debugf("approve transaction success")
-		args.RecordFn(sh.SetStatus(provider.TxStatusSuccess).Out())
+		args.RecordFn(sh.SetActions(ApproveTransactionAction).SetStatus(provider.TxStatusSuccess).Out())
 	}
 
 	if !isActionSuccess && actionNumber <= 2 {
 		amount := args.Amount.Copy()
 		args.Amount = tokenInAmount
 		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
+			OrderId:         args.OrderId,
 			Receiver:        common.HexToAddress(args.Receiver),
 			TokenIn:         tokenIn.Name,
 			TokenOut:        tokenOut.Name,
@@ -208,30 +215,31 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		log.Debug("start build tx")
 		buildTx, err := o.buildTx(ctx, args)
 		if err != nil {
-			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "build tx error")
+			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "build tx error")
 		}
+		sr = sr.SetOrder(buildTx)
 
 		log.WithField("tx_data", buildTx.ToMap()).Debugf("get tx data from okx")
 		args.Amount = amount
 		if buildTx.ToTokenAmount.Div(tokenOutAmountWei).LessThan(decimal.RequireFromString("0.5")) {
 			err = errors.Errorf("minmum receive is too low, minmum receive: %s, amount: %s",
 				buildTx.ToTokenAmount, tokenOutAmountWei)
-			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
+			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
 		}
 		if !isTokenInNative && !buildTx.Tx.Value.IsZero() {
 			err = errors.Errorf("tokenin is not native token, but value is not zero")
-			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
+			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
 		}
 		if isTokenInNative && buildTx.Tx.Value.IsZero() {
 			err = errors.Errorf("tokenin is native token, but value is zero")
-			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
+			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
 		}
 		if isTokenInNative && buildTx.Tx.Value.GreaterThan(tokenInAmountWei.Mul(decimal.RequireFromString("1.5"))) {
 			err = errors.Errorf("tx value is too high, tx value: %s, amount: %s", buildTx.Tx.Value, tokenInAmountWei)
-			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
+			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
 		}
-		sh = sh.SetActions(SourceChainSendingAction)
-		args.RecordFn(sh.SetStatus(provider.TxStatusPending).Out())
+
+		args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusPending).Out())
 		log.Debug("sending tx on chain")
 		txHash, err := args.Sender.SendTransaction(ctx, &types.LegacyTx{
 			To:    &buildTx.Tx.To,
@@ -239,30 +247,37 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 			Data:  common.Hex2Bytes(strings.TrimPrefix(buildTx.Tx.Data, "0x")),
 		}, client)
 		if err != nil {
+			args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)
 			args.RecordFn(sh.SetStatus(provider.TxStatusFailed).Out(), err)
-			return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "send tx error")
+			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "send tx error")
 		}
 		log = log.WithField("tx", txHash)
 		log.Debug("sending tx on chain success")
-		args.RecordFn(sh.SetStatus(provider.TxStatusSuccess).SetTx(txHash.Hex()).Out())
+		sh = sh.SetTx(txHash.Hex())
+		sr = sr.SetTx(txHash.Hex()).SetOrderId(txHash.Hex())
+		args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusSuccess).SetTx(txHash.Hex()).Out())
 		tx = txHash.Hex()
 	}
-	result.Tx = tx
-	sh.SetActions(WaitForTxAction).SetTx(tx)
-	args.RecordFn(sh.SetStatus(provider.TxStatusPending).Out())
+	args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusPending).Out())
 	log.Debugf("waiting for tx on chain")
 	if err := args.Sender.WaitTransaction(ctx, common.HexToHash(tx), client); err != nil {
-		args.RecordFn(sh.SetStatus(provider.TxStatusFailed).Out(), err)
-		return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "wait tx error")
+		args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusFailed).Out(), err)
+		return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "wait tx error")
+	}
+
+	realHash, err := args.Sender.GetRealHash(ctx, common.HexToHash(tx), client)
+	if err != nil {
+		args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusFailed).Out(), err)
+		return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "get real hash error")
 	}
 	log.Debug("waiting for tx in okx")
-	if err := o.WaitForTx(ctx, common.HexToHash(tx), sourceChain.Id); err != nil {
-		args.RecordFn(sh.SetStatus(provider.TxStatusFailed).Out(), err)
-		return result.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "wait okx error")
+	if err := o.WaitForTx(ctx, realHash, sourceChain.Id); err != nil {
+		args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusFailed).Out(), err)
+		return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "wait okx error")
 	}
 	log.Debugf("waiting for tx success in okx")
-	args.RecordFn(sh.SetStatus(provider.TxStatusSuccess).SetCurrentChain(targetChain.Name).Out())
-	return result.SetStatus(provider.TxStatusSuccess).SetCurrentChain(targetChain.Name).SetTx(tx).SetOrderId(tx).Out(), nil
+	args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusSuccess).SetCurrentChain(targetChain.Name).Out())
+	return sr.SetCurrentChain(args.TargetChain).SetStatus(provider.TxStatusSuccess).Out(), nil
 }
 
 func (o *OKX) Help() []string {

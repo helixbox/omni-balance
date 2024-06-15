@@ -171,7 +171,7 @@ func (s *Safe) MultisigTransaction(ctx context.Context, tx *types.LegacyTx, clie
 		return common.Hash{}, errors.Wrap(err, "propose transaction error")
 	}
 	log.Debugf("safe tx hash: %s", safeTxHash)
-	if *info.Threshold > 1 { // todo: notify
+	if *info.Threshold > 1 {
 		return safeTxHash, nil
 	}
 

@@ -80,6 +80,7 @@ func (b *Bridge) GetBalance(ctx context.Context, args provider.BalanceParams) (d
 
 func (b *Bridge) checkAndAppendSourceChainIfBalanceSufficient(ctx context.Context, sourceChain int64,
 	TokenName, wallet string, amount decimal.Decimal, sourceChainIds *[]int64, w *sync.WaitGroup, m *sync.Mutex) {
+	defer utils.Recover()
 
 	defer w.Done()
 	balance, err := b.GetBalance(ctx,

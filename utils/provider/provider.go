@@ -105,6 +105,7 @@ type BalanceParams struct {
 }
 
 type SwapParams struct {
+	OrderId     uint                               `json:"order_id"`
 	SourceToken string                             `json:"source_token"`
 	SourceChain string                             `json:"source_chain"`
 	Sender      wallets.Wallets                    `json:"sender"`
@@ -126,8 +127,14 @@ type SwapResult struct {
 	Order            interface{}                   `json:"order,omitempty"`
 	Status           TxStatus                      `json:"status,omitempty"`
 	CurrentChain     string                        `json:"current_chain_name,omitempty"`
+	Receiver         string                        `json:"receiver,omitempty"`
 	// Tx is the transaction hash
 	Tx string `json:"tx,omitempty"`
+}
+
+func (s *SwapResult) SetReciever(receiver string) *SwapResult {
+	s.Receiver = receiver
+	return s
 }
 
 func (s *SwapResult) SetError(err error) *SwapResult {
@@ -161,6 +168,11 @@ func (s *SwapResult) SetOrderId(id string) *SwapResult {
 
 func (s *SwapResult) SetOrder(order interface{}) *SwapResult {
 	s.Order = order
+	if _, ok := order.(string); ok {
+		s.Order = map[string]interface{}{
+			"data": order,
+		}
+	}
 	return s
 }
 

@@ -11,6 +11,7 @@ import (
 
 func CreateSwapParams(order models.Order, orderProcess models.OrderProcess, log *logrus.Entry, wallet wallets.Wallets) provider.SwapParams {
 	return provider.SwapParams{
+		OrderId:     order.ID,
 		SourceChain: order.CurrentChainName,
 		Sender:      wallet,
 		Receiver:    order.Wallet,

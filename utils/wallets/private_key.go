@@ -199,3 +199,6 @@ func (p *PrivateKeyWallet) WaitTransaction(ctx context.Context, txHash common.Ha
 func (p *PrivateKeyWallet) SignRawMessage(msg []byte) (sig []byte, err error) {
 	return chains.SignMsg(msg, p.conf.PrivateKey)
 }
+func (p *PrivateKeyWallet) GetRealHash(_ context.Context, txHash common.Hash, _ simulated.Client) (common.Hash, error) {
+	return txHash, nil
+}

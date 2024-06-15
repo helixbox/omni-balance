@@ -216,7 +216,7 @@ func BuildSendToken(ctx context.Context, args SendTokenParams) (*types.LegacyTx,
 	var (
 		isNativeToken = strings.EqualFold(args.TokenAddress.Hex(), constant.ZeroAddress.Hex())
 	)
-	balance, err := args.GetBalance(ctx, args.TokenAddress, args.TokenDecimals, args.Client)
+	balance, err := GetTokenBalance(ctx, args.Client, args.TokenAddress.Hex(), args.Sender.Hex(), args.TokenDecimals)
 	if err != nil {
 		return nil, errors.Wrap(err, "get balance")
 	}
@@ -302,6 +302,9 @@ func SendTransaction(ctx context.Context, client simulated.Client, tx *types.Leg
 
 // GetTransferInfo input ex: a9059cbb0000000000000000000000000350101f2cb6aa65caab7954246a56f906a3f57d0000000000000000000000000000000000000000033b2e3c9fd0803ce8000000
 func GetTransferInfo(input []byte) (to common.Address, amount *big.Int, err error) {
+	if len(input) < 4 {
+		return common.Address{}, nil, errors.New("invalid input")
+	}
 	erc20Abi, err := erc20.TokenMetaData.GetAbi()
 	if err != nil {
 		return common.Address{}, nil, errors.Wrap(err, "get abi")

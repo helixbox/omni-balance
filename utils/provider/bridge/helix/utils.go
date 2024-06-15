@@ -115,6 +115,7 @@ func (b *Bridge) GetValidChains(ctx context.Context, targetChainName string, sou
 	for _, chain := range sourceChains {
 		w.Add(1)
 		go func(chainName string) {
+			defer utils.Recover()
 			defer w.Done()
 			chain := b.config.GetChainConfig(chainName)
 			token := b.config.GetTokenInfoOnChain(tokenName, chainName)

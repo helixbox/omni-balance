@@ -231,7 +231,7 @@ func (r Routernitro) WaitForTx(ctx context.Context, hash common.Hash) error {
 		count int64
 	)
 	defer t.Stop()
-	for count < 60 {
+	for count < 600 {
 		select {
 		case <-ctx.Done():
 			log.Debugf("wait for tx %s canceled", hash)
@@ -244,9 +244,10 @@ func (r Routernitro) WaitForTx(ctx context.Context, hash common.Hash) error {
 				log.Debugf("tx %s not found, count: %d", hash, count)
 				continue
 			}
-			log.Debugf("tx %s status: %s", hash, status.Data.FindNitroTransactionByFilter.Status)
+			log.WithFields(utils.ToMap(status)).Infof("tx %s status: %s", hash, status.Data.FindNitroTransactionByFilter.Status)
 			switch status.Data.FindNitroTransactionByFilter.Status {
 			case pendingStatus:
+				count = 0
 				continue
 			case completedStatus:
 				return nil

@@ -7,6 +7,7 @@ import (
 	"omni-balance/internal/daemons"
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
+	"omni-balance/utils"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/token_price"
 	"sync"
@@ -33,6 +34,7 @@ func Run(ctx context.Context, conf configs.Config) error {
 	for _, provider := range providers {
 		w.Add(1)
 		go func(provider token_price.TokenPrice) {
+			defer utils.Recover()
 			defer w.Done()
 			result, err := provider.GetTokenPriceInUSDT(ctx, conf.SourceToken...)
 			if err != nil {

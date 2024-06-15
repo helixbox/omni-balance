@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
+	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/wallets"
@@ -94,6 +95,7 @@ func (m *Monitor) Check(ctx context.Context, ignoreToken ...IgnoreToken) (result
 	for _, wallet := range m.config.Wallets {
 		w.Add(1)
 		go func(wallet configs.Wallet) {
+			defer utils.Recover()
 			defer w.Done()
 			for _, token := range wallet.Tokens {
 				for _, chainName := range token.Chains {
