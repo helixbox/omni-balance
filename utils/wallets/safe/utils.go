@@ -26,6 +26,7 @@ import (
 	"omni-balance/utils/safe_api/client/transactions"
 	"omni-balance/utils/wallets/safe/safe_abi"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -44,6 +45,7 @@ var (
 		constant.Zksync:       "safe-transaction-zkevm.safe.global",
 		constant.Sepolia:      "safe-transaction-sepolia.safe.global",
 	}
+	safeGlobalLocker sync.Mutex
 )
 
 type SafeResp struct {
@@ -206,6 +208,8 @@ func (s *Safe) nonce(ctx context.Context) (int64, error) {
 }
 
 func (s *Safe) proposeTransaction(ctx context.Context, tx *types.LegacyTx) (common.Hash, error) {
+	safeGlobalLocker.Lock()
+	defer safeGlobalLocker.Unlock()
 	nonce, err := s.nonce(ctx)
 	if err != nil {
 		return common.Hash{}, errors.Wrap(err, "get nonce error")
