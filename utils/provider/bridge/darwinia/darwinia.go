@@ -216,6 +216,7 @@ func (b *Bridge) Swap(ctx context.Context, args provider.SwapParams) (result pro
 		recordFn(provider.SwapHistory{Actions: sourceChainSendingAction, Status: string(provider.TxStatusPending),
 			CurrentChain: args.SourceChain})
 		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
+			Receiver:        common.HexToAddress(args.Receiver),
 			TokenIn:         args.SourceToken,
 			TokenOut:        args.TargetToken,
 			TokenInChain:    args.SourceChain,

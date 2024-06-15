@@ -123,7 +123,7 @@ func WaitForTx(ctx context.Context, client simulated.Client, txHash common.Hash)
 				return err
 			}
 			if errors.Is(err, ethereum.NotFound) {
-				log.Debugf("tx not found, txHash: %s, try again later", txHash.Hex())
+				log.Infof("tx not found, txHash: %s, try again later", txHash.Hex())
 				continue
 			}
 			if err != nil {
@@ -133,7 +133,7 @@ func WaitForTx(ctx context.Context, client simulated.Client, txHash common.Hash)
 			if tx.Status == 0 {
 				return errors.New("tx failed")
 			}
-			log.Debugf("tx success, txHash: %s", txHash.Hex())
+			log.Infof("tx success, txHash: %s", txHash.Hex())
 			return nil
 		}
 	}

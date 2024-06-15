@@ -118,7 +118,7 @@ func (s *Safe) SendTransaction(ctx context.Context, tx *types.LegacyTx, client s
 
 func (s *Safe) WaitTransaction(ctx context.Context, txHash common.Hash, _ simulated.Client) error {
 	var (
-		log   = utils.GetLogFromCtx(ctx)
+		log   = utils.GetLogFromCtx(ctx).WithFields(utils.ToMap(s))
 		t     = time.NewTicker(time.Second * 2)
 		count = 0
 	)
@@ -138,10 +138,11 @@ func (s *Safe) WaitTransaction(ctx context.Context, txHash common.Hash, _ simula
 			}
 			if len(tx.Confirmations) < tx.ConfirmationsRequired {
 				count = 0
-				log.Debugf("transaction %s confirmations: %d, required: %d, try to sending notice",
-					txHash, len(tx.Confirmations), tx.ConfirmationsRequired)
+				log.Infof("%s transaction %s confirmations: %d, required: %d,",
+					tx.Safe, txHash, len(tx.Confirmations), tx.ConfirmationsRequired)
 				if err := notice.Send(ctx,
-					fmt.Sprintf("wait %s safeHash %s confirmations and execute.", constant.GetChainName(s.GetChainIdByCtx(ctx)), txHash),
+					fmt.Sprintf("wait %s safeHash %s confirmations and execute.",
+						constant.GetChainName(s.GetChainIdByCtx(ctx)), txHash),
 					fmt.Sprintf("Please go to %s %s safe address to confirm  and execute #%d transaction.",
 						constant.GetChainName(s.GetChainIdByCtx(ctx)), tx.Safe, tx.Nonce),
 					logrus.WarnLevel,

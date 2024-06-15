@@ -138,7 +138,7 @@ func (u *Uniswap) Swap(ctx context.Context, args provider.SwapParams) (result pr
 			ProviderName:    u.Name(),
 			TokenInAmount:   args.Amount,
 			TokenOutAmount:  args.Amount,
-			TransactionType: provider.SwapTransactionAction,
+			TransactionType: provider.ApproveTransactionAction,
 		})
 		if err := chains.TokenApprove(ctx, chains.TokenApproveParams{
 			ChainId:         int64(chain.Id),

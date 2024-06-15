@@ -113,6 +113,7 @@ func (b *Bridge) Swap(ctx context.Context, args provider.SwapParams) (result pro
 		tx.Gas = 406775
 
 		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
+			Receiver:        common.HexToAddress(args.Receiver),
 			TokenIn:         args.SourceToken,
 			TokenOut:        args.TargetToken,
 			TokenInChain:    args.SourceChain,

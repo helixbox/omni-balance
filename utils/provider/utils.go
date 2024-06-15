@@ -11,6 +11,7 @@ import (
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
+	"omni-balance/utils/constant"
 	"omni-balance/utils/notice"
 )
 
@@ -68,6 +69,17 @@ func Transfer(ctx context.Context, conf configs.Config, args SwapParams, client 
 		actionNumber = 0
 		args.LastHistory.Status = ""
 	}
+	ctx = WithNotify(ctx, WithNotifyParams{
+		Receiver:        common.HexToAddress(args.Receiver),
+		TokenIn:         args.SourceToken,
+		TokenOut:        args.TargetToken,
+		TokenInChain:    args.SourceChain,
+		TokenOutChain:   args.TargetChain,
+		ProviderName:    "transfer",
+		TokenInAmount:   args.Amount,
+		TokenOutAmount:  args.Amount,
+		TransactionType: TransferTransactionAction,
+	})
 
 	var txHash = last.Tx
 	if actionNumber < 1 && args.LastHistory.Status != TxStatusSuccess.String() {
@@ -170,6 +182,7 @@ func GetTokenCrossChainProviders(ctx context.Context, args GetTokenCrossChainPro
 }
 
 type WithNotifyParams struct {
+	Receiver                                                     common.Address
 	TokenIn, TokenOut, TokenInChain, TokenOutChain, ProviderName string
 	TokenInAmount, TokenOutAmount                                decimal.Decimal
 	TransactionType                                              TransactionType
@@ -198,6 +211,10 @@ func WithNotify(ctx context.Context, args WithNotifyParams) context.Context {
 		if args.TokenOutChain != "" {
 			fields["tokenOut"] = fmt.Sprintf("%s on %s", fields["tokenOut"], args.TokenOutChain)
 		}
+	}
+
+	if args.Receiver.Cmp(constant.ZeroAddress) != 0 {
+		fields["receiver"] = args.Receiver.Hex()
 	}
 	return notice.WithFields(ctx, fields)
 }

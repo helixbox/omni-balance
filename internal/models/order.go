@@ -6,6 +6,7 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
+	"omni-balance/utils"
 	"omni-balance/utils/configs"
 	"time"
 )
@@ -13,10 +14,10 @@ import (
 type OrderStatus string
 
 const (
-	OrderStatusWait                     OrderStatus = "wait"
-	OrderStatusProcessing               OrderStatus = "processing"
-	OrderStatusSuccess                  OrderStatus = "success"
-	OrderStatusFail                     OrderStatus = "fail"
+	OrderStatusWait OrderStatus = "wait"
+	//OrderStatusProcessing               OrderStatus = "processing"
+	OrderStatusSuccess OrderStatus = "success"
+	//OrderStatusFail                     OrderStatus = "fail"
 	OrderStatusWaitTransferFromOperator OrderStatus = "wait_transfer_from_operator"
 	OrderStatusWaitCrossChain           OrderStatus = "wait_cross_chain"
 	OrderStatusUnknown                  OrderStatus = "unknown"
@@ -95,8 +96,7 @@ func GetLastOrderProcess(ctx context.Context, db *gorm.DB, orderId uint) OrderPr
 }
 
 func (o *Order) GetLogs() *logrus.Entry {
-	data, _ := json.Marshal(o)
-	var fields logrus.Fields
-	_ = json.Unmarshal(data, &fields)
-	return logrus.WithFields(fields)
+	return logrus.WithFields(logrus.Fields{
+		"order": utils.ToMap(o),
+	})
 }

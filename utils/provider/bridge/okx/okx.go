@@ -194,6 +194,7 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		amount := args.Amount.Copy()
 		args.Amount = tokenInAmount
 		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
+			Receiver:        common.HexToAddress(args.Receiver),
 			TokenIn:         tokenIn.Name,
 			TokenOut:        tokenOut.Name,
 			TokenInChain:    args.SourceChain,
@@ -232,7 +233,6 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		sh = sh.SetActions(SourceChainSendingAction)
 		args.RecordFn(sh.SetStatus(provider.TxStatusPending).Out())
 		log.Debug("sending tx on chain")
-		//return provider.SwapResult{}, nil
 		txHash, err := args.Sender.SendTransaction(ctx, &types.LegacyTx{
 			To:    &buildTx.Tx.To,
 			Value: buildTx.Tx.Value.BigInt(),

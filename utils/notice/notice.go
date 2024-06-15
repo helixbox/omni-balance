@@ -37,6 +37,7 @@ type Notice interface {
 
 func SetMsgInterval(interval time.Duration) {
 	if interval.Seconds() < time.Hour.Seconds() {
+		logrus.Warnf("msg interval %s is too short, set to 1 hour", interval)
 		msgInterval = time.Hour
 		return
 	}
@@ -47,7 +48,7 @@ func WithFields(ctx context.Context, fields Fields) context.Context {
 	return context.WithValue(ctx, constant.NoticeFieldsKeyInCtx, fields)
 }
 
-func Init(noticeType Type, conf map[string]interface{}) error {
+func Init(noticeType Type, conf map[string]interface{}, interval time.Duration) error {
 	if notice != nil {
 		return nil
 	}
@@ -64,6 +65,7 @@ func Init(noticeType Type, conf map[string]interface{}) error {
 			return errors.Errorf("notice type %s not support", noticeType)
 		}
 	}
+	SetMsgInterval(interval)
 	return nil
 }
 

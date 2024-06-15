@@ -58,12 +58,13 @@ type Config struct {
 
 	TaskInterval map[string]time.Duration `json:"task_interval" yaml:"task_interval"`
 
-	// 通知渠道, 当成功rebalance时, 发送通知
-	Notice struct {
-		Type     string                 `json:"type" yaml:"type" comment:"Notice type, support: slack"`
-		Config   map[string]interface{} `json:"config" yaml:"config" comment:"It depends on the notification type, slack needs ['webhook','channel']"`
-		Interval time.Duration          `json:"interval" yaml:"interval" comment:"Same message send interval, minimum interval must be greater than or equal to 1 hour, default 1h"`
-	} `json:"notice" yaml:"notice" comment:"Notice config. When rebalance success, send notice"`
+	Notice Notice `json:"notice" yaml:"notice" comment:"Notice config. When rebalance success, send notice"`
+}
+
+type Notice struct {
+	Type     string                 `json:"type" yaml:"type" comment:"Notice type, support: slack"`
+	Config   map[string]interface{} `json:"config" yaml:"config" comment:"It depends on the notification type, slack needs ['webhook','channel']"`
+	Interval time.Duration          `json:"interval" yaml:"interval" comment:"Same message send interval, minimum interval must be greater than or equal to 1 hour, default 1h"`
 }
 
 type Chain struct {

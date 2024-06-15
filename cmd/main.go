@@ -1,12 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
+	"io"
+	"net/http"
+	"net/url"
 	"omni-balance/internal/daemons"
 	_ "omni-balance/internal/daemons/cross_chain"
 	_ "omni-balance/internal/daemons/monitor"
@@ -80,10 +85,9 @@ func Action(cli *cli.Context) error {
 		logrus.SetFormatter(&logrus.JSONFormatter{})
 	}
 
-	if err := notice.Init(notice.Type(config.Notice.Type), config.Notice.Config); err != nil {
+	if err := notice.Init(notice.Type(config.Notice.Type), config.Notice.Config, config.Notice.Interval); err != nil {
 		logrus.Warnf("init notice error: %v", err)
 	}
-	notice.SetMsgInterval(config.Notice.Interval)
 
 	if err := db.InitDb(*config); err != nil {
 		return errors.Wrap(err, "init db")
@@ -114,6 +118,47 @@ func main() {
 	app.Name = "omni-balance"
 	app.Action = Action
 	app.Commands = []*cli.Command{
+		{
+			Name:  "del_order",
+			Usage: "delete order by id",
+			Flags: []cli.Flag{
+				&cli.IntFlag{
+					Name:  "id",
+					Usage: "order id",
+				},
+				&cli.StringFlag{
+					Name:  "server",
+					Usage: "server host, example: http://127.0.0.1:8080",
+					Value: "http://127.0.0.1:8080",
+				},
+			},
+			Action: func(c *cli.Context) error {
+				u, err := url.Parse(c.String("server"))
+				if err != nil {
+					return errors.Wrap(err, "parse server url")
+				}
+				u.RawPath = "/remove_order"
+				u.Path = u.RawPath
+				var body = bytes.NewBuffer(nil)
+				err = json.NewEncoder(body).Encode(map[string]interface{}{
+					"id": c.Int("id"),
+				})
+				if err != nil {
+					return errors.Wrap(err, "encode body")
+				}
+				resp, err := http.Post(u.String(), "application/json", body)
+				if err != nil {
+					return errors.Wrap(err, "post")
+				}
+				defer resp.Body.Close()
+				data, _ := io.ReadAll(resp.Body)
+				if resp.StatusCode != http.StatusOK {
+					return errors.Errorf("http status code: %d, body is: %s", resp.StatusCode, data)
+				}
+				logrus.Infof("delete order #%d success", c.Int64("id"))
+				return nil
+			},
+		},
 		{
 			Name:    "version",
 			Usage:   "show version",

@@ -12,6 +12,8 @@ import (
 	yaml_ncoder "github.com/zwgblue/yaml-encoder"
 	"net/http"
 	"omni-balance/internal/daemons"
+	"omni-balance/internal/db"
+	"omni-balance/internal/models"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/constant"
 	"os"
@@ -26,46 +28,63 @@ var (
 	setPlaceholderFinished = make(chan struct{}, 1)
 )
 
-func startHttpServer(ctx context.Context, port string) (func(ctx context.Context) error, error) {
-	server := &http.Server{
-		Addr: port,
-		Handler: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-			if !strings.EqualFold(request.Method, http.MethodPost) {
-				writer.WriteHeader(http.StatusMethodNotAllowed)
-				return
-			}
-			var args = make(map[string]interface{})
-			if err := json.NewDecoder(request.Body).Decode(&args); err != nil {
-				writer.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			for k, v := range args {
-				placeholder.Store(k, v)
-			}
+func startHttpServer(_ context.Context, port string) error {
+	http.Handle("/", http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if !strings.EqualFold(request.Method, http.MethodPost) {
+			writer.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		var args = make(map[string]interface{})
+		if err := json.NewDecoder(request.Body).Decode(&args); err != nil {
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		for k, v := range args {
+			placeholder.Store(k, v)
+		}
 
-			setPlaceholderFinished <- struct{}{}
-		}),
+		setPlaceholderFinished <- struct{}{}
+	}))
+
+	http.Handle("/remove_order", http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if !strings.EqualFold(request.Method, http.MethodPost) {
+			writer.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		var order = struct {
+			Id int `json:"id" form:"id"`
+		}{}
+		if err := json.NewDecoder(request.Body).Decode(&order); err != nil {
+			writer.WriteHeader(http.StatusBadRequest)
+			_, _ = writer.Write([]byte(err.Error()))
+			return
+		}
+		err := db.DB().Model(&models.Order{}).Where("id = ?", order.Id).Limit(1).Delete(&models.Order{}).Error
+		if err != nil {
+			writer.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		writer.WriteHeader(http.StatusOK)
+	}))
+	server := &http.Server{
+		Addr:    port,
+		Handler: http.DefaultServeMux,
 	}
 	go func() {
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logrus.Panic(err)
 		}
 	}()
-	return server.Shutdown, nil
+	logrus.Infof("http server started on %s", port)
+	return nil
 }
 
-func waitForPlaceholder(ctx context.Context, configPath, port string) (newConfigPath string, err error) {
+func waitForPlaceholder(_ context.Context, configPath string) (newConfigPath string, err error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return "", err
 	}
-	shutdown, err := startHttpServer(ctx, port)
-	if err != nil {
-		return "", err
-	}
-	defer func() {
-		_ = shutdown(ctx)
-	}()
+
 	<-setPlaceholderFinished
 	placeholder.Range(func(key, value interface{}) bool {
 		data = bytes.ReplaceAll(data, []byte(key.(string)), []byte(cast.ToString(value)))
@@ -79,13 +98,17 @@ func waitForPlaceholder(ctx context.Context, configPath, port string) (newConfig
 }
 
 func initConfig(ctx context.Context, enablePlaceholder bool, configPath, serverPort string) (err error) {
+	err = startHttpServer(ctx, serverPort)
+	if err != nil {
+		return err
+	}
 	if enablePlaceholder {
 		ports := strings.Split(serverPort, ":")
 		if len(ports) < 2 {
 			ports = append([]string{}, "", "8080")
 		}
 		logrus.Infof("waiting for placeholder, you can use `curl -X POST -d '{\"<you_placeholder>\":\"0x1234567890\"}' http://127.0.0.1:%s` to set placeholder", ports[1])
-		configPath, err = waitForPlaceholder(context.Background(), configPath, serverPort)
+		configPath, err = waitForPlaceholder(context.Background(), configPath)
 		if err != nil {
 			return err
 		}

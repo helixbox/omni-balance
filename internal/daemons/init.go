@@ -103,17 +103,17 @@ func runForever(ctx context.Context, conf configs.Config, task Task) {
 func Run(ctx context.Context, conf configs.Config) error {
 	for index := range tasks {
 		if tasks[index].RunOnStart {
-			logrus.Infof("task %s run on start, wait for the task finished", tasks[index].Name)
+			logrus.Debugf("task %s run on start, wait for the task finished", tasks[index].Name)
 			if err := tasks[index].TaskFunc(ctx, conf); err != nil {
 				logrus.Errorf("task %s failed, err: %v", tasks[index].Name, err)
 				continue
 			}
-			logrus.Infof("task %s run on start finished", tasks[index].Name)
+			logrus.Debugf("task %s run on start finished", tasks[index].Name)
 			continue
 		}
 	}
 	for index := range tasks {
-		logrus.Infof("task %s run in background", tasks[index].Name)
+		logrus.Debugf("task %s run in background", tasks[index].Name)
 		go runForever(ctx, conf, tasks[index])
 	}
 	return nil

@@ -46,8 +46,29 @@ func Run(ctx context.Context, conf configs.Config) error {
 		go func(order *models.Order) {
 			defer w.Done()
 			log := order.GetLogs()
-			utils.SetLogToCtx(ctx, log)
-			if err := reBalance(ctx, order, conf); err != nil {
+			subCtx, cancel := context.WithCancel(utils.SetLogToCtx(ctx, log))
+			defer cancel()
+
+			go func() {
+				defer cancel()
+				var t = time.NewTicker(time.Second * 5)
+				defer t.Stop()
+
+				for {
+					select {
+					case <-subCtx.Done():
+						return
+					case <-t.C:
+						var count int64
+						_ = db.DB().Model(&models.Order{}).Where("id = ?", order.ID).Count(&count)
+						if count == 0 {
+							log.Infof("order #%d not found, exit this order rebalance", order.ID)
+							return
+						}
+					}
+				}
+			}()
+			if err := reBalance(subCtx, order, conf); err != nil {
 				log.Errorf("reBalance order #%d error: %s", order.ID, err)
 				return
 			}
@@ -149,7 +170,8 @@ func reBalance(ctx context.Context, order *models.Order, conf configs.Config) er
 		return errors.Wrap(err, "save provider error")
 	}
 
-	log.Infof("start reBalance %s on %s use %s provider", order.TokenOutName, order.TargetChainName, providerObj.Name())
+	log.Infof("start reBalance #%d %s on %s use %s provider", order.ID, order.TokenOutName,
+		order.TargetChainName, providerObj.Name())
 	result, err := providerObj.Swap(ctx, args)
 	if err != nil {
 		return errors.Wrapf(err, "reBalance %s on %s error", order.TokenOutName, providerObj.Name())
@@ -321,12 +343,11 @@ func getReBalanceProvider(ctx context.Context, order models.Order, conf configs.
 }
 
 func providerSupportsOrder(ctx context.Context, p provider.Provider, order models.Order, conf configs.Config, log *logrus.Entry) (provider.TokenInCosts, bool) {
-	wallet := conf.GetWallet(order.Wallet)
 	tokenInCosts, err := p.GetCost(ctx, provider.SwapParams{
 		SourceToken: order.TokenInName,
 		Sender:      conf.GetWallet(order.Wallet),
 		TargetToken: order.TokenOutName,
-		Receiver:    wallet.GetAddress().Hex(),
+		Receiver:    order.Wallet,
 		TargetChain: order.TargetChainName,
 		Amount:      order.Amount,
 	})

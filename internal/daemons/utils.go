@@ -13,7 +13,7 @@ func CreateSwapParams(order models.Order, orderProcess models.OrderProcess, log 
 	return provider.SwapParams{
 		SourceChain: order.CurrentChainName,
 		Sender:      wallet,
-		Receiver:    wallet.GetAddress().Hex(),
+		Receiver:    order.Wallet,
 		TargetChain: order.TargetChainName,
 		SourceToken: order.TokenOutName,
 		TargetToken: order.TokenOutName,
