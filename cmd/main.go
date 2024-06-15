@@ -69,6 +69,7 @@ func Action(cli *cli.Context) error {
 	if err := initConfig(ctx, cli.Bool("placeholder"), cli.String("conf"), cli.String("port")); err != nil {
 		return errors.Wrap(err, "init config")
 	}
+	logrus.Infof("version: %s, commit: %s, commitTime: %s", version, commitMessage, commitTime)
 	if config.Debug {
 		logrus.SetReportCaller(true)
 		logrus.SetLevel(logrus.DebugLevel)
