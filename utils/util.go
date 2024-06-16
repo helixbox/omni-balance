@@ -134,7 +134,7 @@ func Request(ctx context.Context, method string, url string, body io.Reader, des
 	for i := 0; i < len(headers); i += 2 {
 		req.Header.Set(headers[i], headers[i+1])
 	}
-	if req.Header.Get("content-type") == "" {
+	if body != nil && req.Header.Get("content-type") == "" {
 		req.Header.Set("content-type", "application/json")
 	}
 	if req.Header.Get("accept") == "" {
@@ -143,6 +143,7 @@ func Request(ctx context.Context, method string, url string, body io.Reader, des
 	req = req.WithContext(ctx)
 	var count int
 	for count < 3 {
+		logrus.Debugf("request: %s %s, try %d", req.Method, req.URL, count)
 		count++
 		resp, err := new(http.Client).Do(req)
 		if err != nil {

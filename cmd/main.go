@@ -24,7 +24,7 @@ import (
 	"omni-balance/utils/notice"
 	"omni-balance/utils/provider"
 	_ "omni-balance/utils/provider/bridge/darwinia"
-	_ "omni-balance/utils/provider/bridge/helix"
+	_ "omni-balance/utils/provider/bridge/li"
 	_ "omni-balance/utils/provider/bridge/okx"
 	_ "omni-balance/utils/provider/bridge/routernitro"
 	_ "omni-balance/utils/provider/cex/gate"
