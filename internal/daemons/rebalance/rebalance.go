@@ -32,6 +32,24 @@ func init() {
 	})
 }
 
+var (
+	orderError = make(map[uint]int)
+	m          sync.Mutex
+)
+
+func addOrderError(orderId uint) int {
+	m.Lock()
+	defer m.Unlock()
+	orderError[orderId] = orderError[orderId] + 1
+	return orderError[orderId]
+}
+
+func removeOrderError(orderId uint) {
+	m.Lock()
+	defer m.Unlock()
+	delete(orderError, orderId)
+}
+
 func Run(ctx context.Context, conf configs.Config) error {
 	orders, err := listOrders(ctx)
 	if err != nil {
@@ -76,10 +94,29 @@ func Run(ctx context.Context, conf configs.Config) error {
 				}
 			})
 
-			if err := reBalance(subCtx, order, conf); err != nil {
+			err := reBalance(subCtx, order, conf)
+			if errors.Is(err, error_types.ErrNoProvider) {
+				if addOrderError(order.ID) > 3 {
+					log.Errorf("order #%d not found provider, exit this order rebalance. send notice", order.ID)
+					_ = notice.Send(
+						provider.WithNotify(ctx, provider.WithNotifyParams{
+							OrderId:       order.ID,
+							Receiver:      common.HexToAddress(order.Wallet),
+							TokenOut:      order.TokenOutName,
+							TokenOutChain: order.TargetChainName,
+						}),
+						"Find provider error",
+						fmt.Sprintf("order #%d not found provider, please check the provider configuration.", order.ID),
+						logrus.ErrorLevel,
+					)
+					return
+				}
+			}
+			if err != nil {
 				log.Errorf("reBalance order #%d error: %s", order.ID, err)
 				return
 			}
+			removeOrderError(order.ID)
 			order = models.GetOrder(ctx, db.DB(), order.ID)
 
 			err = notice.Send(
@@ -312,7 +349,7 @@ func getReBalanceProvider(ctx context.Context, order models.Order, conf configs.
 	}
 
 	if len(canUseProviders) <= 0 {
-		return nil, errors.New("no provider can use")
+		return nil, error_types.ErrNoProvider
 	}
 	if len(canUseProviders) == 1 {
 		log.Debugf("can use %s provider, the tokenIn is %+v", canUseProviders[0].provider.Name(), canUseProviders[0].tokenInCosts)

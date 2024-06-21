@@ -14,4 +14,5 @@ var (
 	ErrUnsupportedWalletType    = errors.New("unsupported wallet type")
 	ErrUnsupportedActions       = errors.New("unsupported actions")
 	ErrWalletLocked             = errors.New("wallet locked")
+	ErrNoProvider               = errors.New("no available provider was found")
 )
