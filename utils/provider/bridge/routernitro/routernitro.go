@@ -264,7 +264,7 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 		tx = txHash.Hex()
 	}
 
-	args.RecordFn(sh.SetStatus(provider.TxStatusPending).Out())
+	args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusPending).Out())
 	log.Debugf("waiting for tx on chain")
 	if err := args.Sender.WaitTransaction(ctx, common.HexToHash(tx), client); err != nil {
 		args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusFailed).Out(), err)
@@ -295,6 +295,6 @@ func (r Routernitro) Name() string {
 	return "router_nitro"
 }
 
-func (r Routernitro) Type() configs.LiquidityProviderType {
+func (r Routernitro) Type() configs.ProviderType {
 	return configs.Bridge
 }

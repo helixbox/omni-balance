@@ -9,33 +9,33 @@ import (
 type InitFunc func(conf configs.Config, noInit ...bool) (Provider, error)
 
 var (
-	providers = make(map[configs.LiquidityProviderType][]InitFunc)
+	providers = make(map[configs.ProviderType][]InitFunc)
 	m         sync.Mutex
 )
 
-func Register(providerType configs.LiquidityProviderType, provider InitFunc) {
+func Register(providerType configs.ProviderType, provider InitFunc) {
 	m.Lock()
 	defer m.Unlock()
 	providers[providerType] = append(providers[providerType], provider)
 }
 
-func ListProviders() map[configs.LiquidityProviderType][]InitFunc {
-	var result = make(map[configs.LiquidityProviderType][]InitFunc)
+func ListProviders() map[configs.ProviderType][]InitFunc {
+	var result = make(map[configs.ProviderType][]InitFunc)
 	for k, v := range providers {
 		result[k] = v
 	}
 	return result
 }
 
-func ListProvidersByConfig(conf configs.Config) map[configs.LiquidityProviderType][]InitFunc {
+func ListProvidersByConfig(conf configs.Config) map[configs.ProviderType][]InitFunc {
 	m.Lock()
 	defer m.Unlock()
 	var (
 		providerNames = make(map[string]struct{})
-		result        = make(map[configs.LiquidityProviderType][]InitFunc)
+		result        = make(map[configs.ProviderType][]InitFunc)
 	)
-	for _, v := range conf.LiquidityProviders {
-		providerNames[v.LiquidityName] = struct{}{}
+	for _, v := range conf.Providers {
+		providerNames[v.Name] = struct{}{}
 	}
 	for providerType, providerInitFuncs := range providers {
 		for index, fn := range providerInitFuncs {
@@ -50,11 +50,11 @@ func ListProvidersByConfig(conf configs.Config) map[configs.LiquidityProviderTyp
 	return result
 }
 
-func LiquidityProviderTypeAndConf(providerType configs.LiquidityProviderType, conf configs.Config) []InitFunc {
+func LiquidityProviderTypeAndConf(providerType configs.ProviderType, conf configs.Config) []InitFunc {
 	return ListProvidersByConfig(conf)[providerType]
 }
 
-func GetProvider(providerType configs.LiquidityProviderType, name string) (InitFunc, error) {
+func GetProvider(providerType configs.ProviderType, name string) (InitFunc, error) {
 	for _, fn := range providers[providerType] {
 		p, err := fn(configs.Config{}, true)
 		if err != nil {

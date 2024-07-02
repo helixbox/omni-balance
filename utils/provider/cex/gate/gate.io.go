@@ -404,6 +404,6 @@ func (g *Gate) Name() string {
 	return "gate.io"
 }
 
-func (g *Gate) Type() configs.LiquidityProviderType {
+func (g *Gate) Type() configs.ProviderType {
 	return configs.CEX
 }

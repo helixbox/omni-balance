@@ -3,3 +3,5 @@
 local
 .run
 ./config.yaml
+omni-balance.db
+start.sh

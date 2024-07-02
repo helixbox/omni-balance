@@ -55,7 +55,7 @@ func createOrderProcess(order models.Order, s provider.SwapHistory) *models.Orde
 		providerName = order.ProviderName
 	)
 	if s.ProviderType != "" {
-		providerType = configs.LiquidityProviderType(s.ProviderType)
+		providerType = configs.ProviderType(s.ProviderType)
 	}
 	if s.ProviderName != "" {
 		providerName = s.ProviderName

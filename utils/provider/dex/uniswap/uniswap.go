@@ -244,7 +244,7 @@ func (u *Uniswap) Name() string {
 	return "uniswap"
 }
 
-func (u *Uniswap) Type() configs.LiquidityProviderType {
+func (u *Uniswap) Type() configs.ProviderType {
 	return configs.DEX
 }
 

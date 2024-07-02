@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"omni-balance/utils/constant"
 	"reflect"
+	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -146,6 +147,9 @@ func Request(ctx context.Context, method string, url string, body io.Reader, des
 		logrus.Debugf("request: %s %s, try %d", req.Method, req.URL, count)
 		count++
 		resp, err := new(http.Client).Do(req)
+		if errors.Is(err, context.Canceled) {
+			return context.Canceled
+		}
 		if err != nil {
 			logrus.Debugf("request failed: %s", err)
 			time.Sleep(time.Second)
@@ -219,6 +223,18 @@ func Go(f func()) {
 
 func Recover() {
 	if err := recover(); err != nil {
+		debug.PrintStack()
 		logrus.Errorf("panic: %s", err)
 	}
+}
+
+func Object2JsonRawMessage(v interface{}) *json.RawMessage {
+	if v == nil {
+		return nil
+	}
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return (*json.RawMessage)(&data)
 }

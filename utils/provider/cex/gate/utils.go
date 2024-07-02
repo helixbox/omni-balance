@@ -74,6 +74,15 @@ func ChainName2GateChainName(chainName string) string {
 	return chainName
 }
 
+func GateChainName2StandardName(chainName string) string {
+	for k, v := range gateChain2StandardName {
+		if strings.EqualFold(chainName, k) {
+			return v
+		}
+	}
+	return chainName
+}
+
 func (g *Gate) ticker(pairs string) (TickerResult, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://data.gateapi.io/api/1/ticker/%s", pairs), nil)
 	if err != nil {
@@ -200,4 +209,43 @@ func (g *Gate) IsVerifiedAddress(ctx context.Context, address, tokenName, chainN
 		break
 	}
 	return isSenderInVerifiedAddress, nil
+}
+
+// GetDepositAddress retrieves the deposit address for a token.
+// This method calls the GateAPI's GetDepositAddress interface, using tokenName and chainName to filter for valid deposit addresses.
+// Parameters:
+//
+//	ctx: Context object for canceling requests or other operations.
+//	tokenName: The name of the token.
+//	chainName: The name of the blockchain. If chainName is empty, all deposit addresses for the specified token are returned.
+//
+// Returns:
+//
+//	[]gateapi.MultiChainAddressItem: A list of deposit addresses that meet the specified criteria.
+//	error: If an error occurs while fetching the address, an error message is returned.
+func (g *Gate) GetDepositAddress(ctx context.Context, tokenName, chainName string) ([]gateapi.MultiChainAddressItem, error) {
+	depositInfo, _, err := g.client.WalletApi.GetDepositAddress(ctx, TokenName2GateTokenName(tokenName))
+	if err != nil {
+		return nil, errors.Wrap(err, "get deposit address")
+	}
+	var result []gateapi.MultiChainAddressItem
+	for _, v := range depositInfo.MultichainAddresses {
+		if v.ObtainFailed != 0 {
+			continue
+		}
+		if chainName != "" && !strings.EqualFold(GateChainName2StandardName(v.Chain), chainName) {
+			continue
+		}
+		result = append(result, gateapi.MultiChainAddressItem{
+			Chain:        GateChainName2StandardName(v.Chain),
+			Address:      v.Address,
+			PaymentId:    v.PaymentId,
+			PaymentName:  v.PaymentName,
+			ObtainFailed: v.ObtainFailed,
+		})
+	}
+	if len(result) == 0 {
+		return nil, errors.Errorf("no deposit address for %s", tokenName)
+	}
+	return result, nil
 }

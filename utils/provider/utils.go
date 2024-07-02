@@ -40,6 +40,8 @@ func action2Int(action string) int {
 }
 
 func Transfer(ctx context.Context, conf configs.Config, args SwapParams, client simulated.Client) (SwapResult, error) {
+	args.SourceToken = args.TargetToken
+	args.SourceChain = args.TargetChain
 
 	var (
 		log          = utils.GetLogFromCtx(ctx)
@@ -108,10 +110,11 @@ func Transfer(ctx context.Context, conf configs.Config, args SwapParams, client 
 			ToAddress:    common.HexToAddress(args.Receiver),
 			AmountWei:    decimal.NewFromBigInt(chains.EthToWei(args.Amount, token.Decimals), 0),
 		})
-		sr = sr.SetOrder(common.Bytes2Hex(transaction.Data))
+
 		if err != nil {
 			return sr.SetStatus(TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "send token error")
 		}
+		sr = sr.SetOrder(common.Bytes2Hex(transaction.Data))
 		log.Debugf("%s transfer %s %s to %s", args.Sender.GetAddress(true), args.TargetToken,
 			args.Amount, args.Sender.GetAddress())
 		recordFn(sh.SetStatus(TxStatusPending).SetActions(transferSent).Out())
@@ -157,8 +160,8 @@ func GetTokenCrossChainProviders(ctx context.Context, args GetTokenCrossChainPro
 			continue
 		}
 		var hasConfig bool
-		for _, v := range args.Conf.LiquidityProviders {
-			if v.Type != configs.Bridge || v.LiquidityName == bridge.Name() {
+		for _, v := range args.Conf.Providers {
+			if v.Type != configs.Bridge || v.Name == bridge.Name() {
 				continue
 			}
 			hasConfig = true
@@ -181,6 +184,7 @@ func GetTokenCrossChainProviders(ctx context.Context, args GetTokenCrossChainPro
 }
 
 type WithNotifyParams struct {
+	TaskId                                                       string
 	OrderId                                                      uint
 	Receiver                                                     common.Address
 	TokenIn, TokenOut, TokenInChain, TokenOutChain, ProviderName string
@@ -202,6 +206,9 @@ func WithNotify(ctx context.Context, args WithNotifyParams) context.Context {
 		if args.TokenInChain != "" {
 			fields["tokenIn"] = fmt.Sprintf("%s on %s", fields["tokenIn"], args.TokenInChain)
 		}
+	}
+	if args.TaskId != "" {
+		fields["taskId"] = args.TaskId
 	}
 
 	if args.OrderId != 0 {

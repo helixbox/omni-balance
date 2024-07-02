@@ -193,26 +193,26 @@ func CreateExampleConfig(exampleConfigPath string) error {
 				Chains: []string{"etnereum", "arbitrum"},
 			},
 		},
-		LiquidityProviders: []configs.LiquidityProvider{
+		Providers: []configs.Provider{
 			{
-				Type:          configs.CEX,
-				LiquidityName: "gate.io",
+				Type: configs.CEX,
+				Name: "gate.io",
 				Config: map[string]interface{}{
 					"key":    "<gate_api_key>",
 					"secret": "<gate_api_secret>",
 				},
 			},
 			{
-				Type:          configs.DEX,
-				LiquidityName: "uniswap",
+				Type: configs.DEX,
+				Name: "uniswap",
 			},
 			{
-				Type:          configs.Bridge,
-				LiquidityName: "helixbridge",
+				Type: configs.Bridge,
+				Name: "helixbridge",
 			},
 			{
-				Type:          configs.Bridge,
-				LiquidityName: "darwinia-bridge",
+				Type: configs.Bridge,
+				Name: "darwinia-bridge",
 			},
 		},
 		Wallets: []configs.Wallet{

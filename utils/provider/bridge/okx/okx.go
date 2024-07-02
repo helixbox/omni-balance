@@ -248,7 +248,6 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		}, client)
 		if err != nil {
 			args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)
-			args.RecordFn(sh.SetStatus(provider.TxStatusFailed).Out(), err)
 			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "send tx error")
 		}
 		log = log.WithField("tx", txHash)
@@ -293,6 +292,6 @@ func (o *OKX) Name() string {
 	return "okx"
 }
 
-func (o *OKX) Type() configs.LiquidityProviderType {
+func (o *OKX) Type() configs.ProviderType {
 	return configs.Bridge
 }

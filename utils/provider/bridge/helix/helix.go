@@ -243,6 +243,6 @@ func (b *Bridge) Name() string {
 	return "helixbridge"
 }
 
-func (b *Bridge) Type() configs.LiquidityProviderType {
+func (b *Bridge) Type() configs.ProviderType {
 	return configs.Bridge
 }

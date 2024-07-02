@@ -120,11 +120,11 @@ func (s *Safe) SendTransaction(ctx context.Context, tx *types.LegacyTx, client s
 func (s *Safe) WaitTransaction(ctx context.Context, txHash common.Hash, _ simulated.Client) error {
 	var (
 		log   = utils.GetLogFromCtx(ctx).WithFields(utils.ToMap(s))
-		t     = time.NewTicker(time.Second * 2)
+		t     = time.NewTicker(time.Second * 10)
 		count = 0
 	)
 	defer t.Stop()
-	for count < 60 { // 180s
+	for count < 60 {
 		select {
 		case <-ctx.Done():
 			return context.Canceled

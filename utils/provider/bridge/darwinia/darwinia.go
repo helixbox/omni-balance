@@ -310,6 +310,6 @@ func (b *Bridge) Name() string {
 	return "darwinia-bridge"
 }
 
-func (b *Bridge) Type() configs.LiquidityProviderType {
+func (b *Bridge) Type() configs.ProviderType {
 	return configs.Bridge
 }

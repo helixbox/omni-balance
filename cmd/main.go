@@ -13,9 +13,9 @@ import (
 	"net/http"
 	"net/url"
 	"omni-balance/internal/daemons"
+	_ "omni-balance/internal/daemons/bot"
 	_ "omni-balance/internal/daemons/cross_chain"
-	_ "omni-balance/internal/daemons/monitor"
-	_ "omni-balance/internal/daemons/rebalance"
+	_ "omni-balance/internal/daemons/market"
 	_ "omni-balance/internal/daemons/token_price"
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
@@ -66,6 +66,7 @@ func Usage(_ *cli.Context) error {
 }
 
 func Action(cli *cli.Context) error {
+	fmt.Println(cli.String("conf"))
 	if err := initConfig(ctx, cli.Bool("placeholder"), cli.String("conf"), cli.String("port")); err != nil {
 		return errors.Wrap(err, "init config")
 	}
@@ -104,6 +105,7 @@ func Action(cli *cli.Context) error {
 	if err := daemons.Run(ctx, *config); err != nil {
 		return errors.Wrap(err, "run daemons")
 	}
+
 	utils.FinishInit()
 
 	quit := make(chan os.Signal, 1)

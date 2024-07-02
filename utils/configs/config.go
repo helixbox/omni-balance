@@ -15,17 +15,17 @@ import (
 	"time"
 )
 
-// LiquidityProviderType liquidity provider type
-type LiquidityProviderType string
+// ProviderType liquidity providersMap type
+type ProviderType string
 type DbType string
 
 const (
 	// CEX centralized exchange
-	CEX LiquidityProviderType = "CEX"
+	CEX ProviderType = "CEX"
 	// DEX decentralized exchange
-	DEX LiquidityProviderType = "DEX"
+	DEX ProviderType = "DEX"
 	// Bridge cross-chain bridge
-	Bridge LiquidityProviderType = "Bridge"
+	Bridge ProviderType = "Bridge"
 )
 
 const (
@@ -41,15 +41,15 @@ type Config struct {
 	Debug bool `json:"debug" yaml:"debug" comment:"Debug mode"`
 
 	// Chains need to be monitored
-	Chains []Chain `json:"chains" yaml:"chains" comment:"Chains"`
-	chains map[string]Chain
+	Chains    []Chain `json:"chains" yaml:"chains" comment:"Chains"`
+	chainsMap map[string]Chain
 
 	// SourceToken used to buy other tokens
-	SourceToken []SourceToken `json:"source_token" yaml:"source_token" comment:"Source token used to buy other tokens"`
-	sourceToken map[string]SourceToken
+	SourceToken    []SourceToken `json:"source_token" yaml:"source_token" comment:"Source token used to buy other tokens"`
+	sourceTokenMap map[string]SourceToken
 
-	LiquidityProviders []LiquidityProvider `json:"liquidity_providers" yaml:"liquidity_providers" comment:"Liquidity providers"`
-	liquidityProvider  map[LiquidityProviderType][]LiquidityProvider
+	Providers    []Provider `json:"providers" yaml:"providers" comment:"providers"`
+	providersMap map[ProviderType][]Provider
 
 	Wallets []Wallet `json:"wallets" yaml:"wallets" comment:"Wallets need to rebalance"`
 	wallets map[string]Wallet
@@ -92,10 +92,11 @@ type Operator struct {
 }
 
 type WalletToken struct {
-	Name      string          `json:"name" yaml:"name" comment:"Token name"`
-	Amount    decimal.Decimal `json:"amount" yaml:"amount" comment:"The number of each rebalance"`
-	Threshold decimal.Decimal `json:"threshold" yaml:"threshold" comment:"Threshold when the token balance is less than the threshold, the rebalance will be triggered"`
-	Chains    []string        `json:"chains" yaml:"chains" comment:"The chains need to be monitored"`
+	Name         string            `json:"name" yaml:"name" comment:"Token name"`
+	Amount       decimal.Decimal   `json:"amount" yaml:"amount" comment:"The number of each rebalance"`
+	Threshold    decimal.Decimal   `json:"threshold" yaml:"threshold" comment:"Threshold when the token balance is less than the threshold, the rebalance will be triggered"`
+	Chains       []string          `json:"chains" yaml:"chains" comment:"The chains need to be monitored"`
+	MonitorTypes map[string]string `json:"monitorTypes" yaml:"monitorTypes" comment:"Which monitoring type should this token use on the specified chain. Default: 'balance_on_chain'. Support types: balance_on_chain='The real balance of the address on the chain''"`
 }
 
 type CrossChain struct {
@@ -123,14 +124,14 @@ type TargetToken struct {
 	Threshold decimal.Decimal `json:"threshold" yaml:"threshold" help:"Threshold when the token balance is less than the threshold, the rebalance will be triggered"`
 }
 
-// LiquidityProvider liquidity provider
-type LiquidityProvider struct {
-	// Type liquidity provider type
-	Type LiquidityProviderType `json:"type" yaml:"type" comment:"Type liquidity provider type"`
-	// LiquidityName liquidity provider name
-	LiquidityName string `json:"liquidity_name" yaml:"liquidity_name" comment:"LiquidityName liquidity provider name"`
-	// Config liquidity provider config, depend on the type
-	Config map[string]interface{} `json:"config" yaml:"config" comment:"Config liquidity provider config, depend on the type"`
+// Provider liquidity providersMap
+type Provider struct {
+	// Type liquidity providersMap type
+	Type ProviderType `json:"type" yaml:"type" comment:"Type liquidity providersMap type"`
+	// Name liquidity providersMap name
+	Name string `json:"name" yaml:"name" comment:"providersMap name"`
+	// Config liquidity providersMap config, depend on the type
+	Config map[string]interface{} `json:"config" yaml:"config" comment:"Config liquidity providersMap config, depend on the type"`
 }
 
 type DbConfig struct {
@@ -173,7 +174,7 @@ func (c Chain) GetToken(tokenName string) Token {
 }
 
 func (c *Config) Init() *Config {
-	c.chains = make(map[string]Chain)
+	c.chainsMap = make(map[string]Chain)
 	oldName2NewName := make(map[string]string)
 
 	for index, v := range c.Chains {
@@ -181,13 +182,12 @@ func (c *Config) Init() *Config {
 		if newName == "" {
 			panic(fmt.Sprintf("chain id %d not found", v.Id))
 		}
-		// 规范所有链的名字
 		oldName2NewName[v.Name] = newName
 		c.Chains[index].Name = newName
-		c.chains[newName] = c.Chains[index]
+		c.chainsMap[newName] = c.Chains[index]
 	}
 
-	c.sourceToken = make(map[string]SourceToken)
+	c.sourceTokenMap = make(map[string]SourceToken)
 	for index, v := range c.SourceToken {
 		var chains []string
 		for _, v := range v.Chains {
@@ -198,18 +198,21 @@ func (c *Config) Init() *Config {
 			panic(fmt.Sprintf("chain %s not found", v))
 		}
 		c.SourceToken[index].Chains = chains
-		c.sourceToken[v.Name] = c.SourceToken[index]
+		c.sourceTokenMap[v.Name] = c.SourceToken[index]
 	}
 
-	c.liquidityProvider = make(map[LiquidityProviderType][]LiquidityProvider)
-	for _, v := range c.LiquidityProviders {
-		c.liquidityProvider[v.Type] = append(c.liquidityProvider[v.Type], v)
+	c.providersMap = make(map[ProviderType][]Provider)
+	for _, v := range c.Providers {
+		c.providersMap[v.Type] = append(c.providersMap[v.Type], v)
 	}
 
 	c.wallets = make(map[string]Wallet)
 	for walletIndex, v := range c.Wallets {
 		for index, t := range v.Tokens {
-			var chains []string
+			var (
+				chains       []string
+				monitorTypes = make(map[string]string)
+			)
 			for _, v := range t.Chains {
 				if newName, ok := oldName2NewName[v]; ok {
 					chains = append(chains, newName)
@@ -217,7 +220,15 @@ func (c *Config) Init() *Config {
 				}
 				panic(fmt.Sprintf("chain %s not found", v))
 			}
+			for name, v := range t.MonitorTypes {
+				if newName, ok := oldName2NewName[v]; ok {
+					monitorTypes[name] = newName
+					continue
+				}
+				panic(fmt.Sprintf("chain %s not found", v))
+			}
 			c.Wallets[walletIndex].Tokens[index].Chains = chains
+			c.Wallets[walletIndex].Tokens[index].MonitorTypes = monitorTypes
 		}
 		c.wallets[v.Address] = c.Wallets[walletIndex]
 	}
@@ -237,13 +248,13 @@ func (c *Config) Check() error {
 		}
 		for index, v := range v.Tokens {
 			if v.ContractAddress == "" {
-				return errors.Errorf("chains[%d]tokens[%d]contract_address must be set", chainIndex, index)
+				return errors.Errorf("chainsMap[%d]tokens[%d]contract_address must be set", chainIndex, index)
 			}
 			if v.Name == "" {
-				return errors.Errorf("chains[%d]tokens[%d]name must be set", chainIndex, index)
+				return errors.Errorf("chainsMap[%d]tokens[%d]name must be set", chainIndex, index)
 			}
 			if v.Decimals == 0 {
-				return errors.Errorf("chains[%d]tokens[%d]decimals must be set", chainIndex, index)
+				return errors.Errorf("chainsMap[%d]tokens[%d]decimals must be set", chainIndex, index)
 			}
 		}
 	}
@@ -253,30 +264,30 @@ func (c *Config) Check() error {
 	}
 	for index, v := range c.SourceToken {
 		for chainIndex, chain := range v.Chains {
-			if _, ok := c.chains[chain]; !ok {
-				return errors.Errorf("source_token[%d]chains[%d] not in chains", index, chainIndex)
+			if _, ok := c.chainsMap[chain]; !ok {
+				return errors.Errorf("source_token[%d]chainsMap[%d] not in chainsMap", index, chainIndex)
 			}
 			var ok bool
-			for _, token := range c.chains[chain].Tokens {
+			for _, token := range c.chainsMap[chain].Tokens {
 				if strings.EqualFold(token.Name, v.Name) {
 					ok = true
 				}
 			}
 			if !ok {
-				return errors.Errorf("source_token[%d] token name not in chains", index)
+				return errors.Errorf("source_token[%d] token name not in chainsMap", index)
 			}
 		}
 	}
 
-	if len(c.LiquidityProviders) == 0 {
+	if len(c.Providers) == 0 {
 		return errors.New("liquidity_providers must be set")
 	}
-	for index, v := range c.LiquidityProviders {
+	for index, v := range c.Providers {
 		if v.Type == "" {
 			return errors.Errorf("liquidity_providers[%d]type must be set", index)
 		}
 
-		if v.LiquidityName == "" {
+		if v.Name == "" {
 			return errors.Errorf("liquidity_providers[%d]liquidity_name must be set", index)
 		}
 	}
@@ -303,20 +314,20 @@ func (c *Config) Check() error {
 			}
 
 			if len(token.Chains) == 0 {
-				return errors.Errorf("wallets[%d]tokens[%d]chains must be set", index, tokenIndex)
+				return errors.Errorf("wallets[%d]tokens[%d]chainsMap must be set", index, tokenIndex)
 			}
 			for chainIndex, chain := range token.Chains {
-				if _, ok := c.chains[chain]; !ok {
-					return errors.Errorf("wallets[%d]tokens[%d]chains[%d] not in chains", index, tokenIndex, chainIndex)
+				if _, ok := c.chainsMap[chain]; !ok {
+					return errors.Errorf("wallets[%d]tokens[%d]chainsMap[%d] not in chainsMap", index, tokenIndex, chainIndex)
 				}
 				var ok bool
-				for _, chainToken := range c.chains[chain].Tokens {
+				for _, chainToken := range c.chainsMap[chain].Tokens {
 					if strings.EqualFold(chainToken.Name, chainToken.Name) {
 						ok = true
 					}
 				}
 				if !ok {
-					return errors.Errorf("wallets[%d]tokens[%d] token name not in chains", index, tokenIndex)
+					return errors.Errorf("wallets[%d]tokens[%d] token name not in chainsMap", index, tokenIndex)
 				}
 			}
 		}
@@ -337,9 +348,9 @@ func (c *Config) Check() error {
 	return nil
 }
 
-func (c *Config) GetProvidersConfig(name string, providerType LiquidityProviderType, dest interface{}) error {
-	for _, provider := range c.liquidityProvider[providerType] {
-		if !strings.EqualFold(provider.LiquidityName, name) {
+func (c *Config) GetProvidersConfig(name string, providerType ProviderType, dest interface{}) error {
+	for _, provider := range c.providersMap[providerType] {
+		if !strings.EqualFold(provider.Name, name) {
 			continue
 		}
 
@@ -349,11 +360,11 @@ func (c *Config) GetProvidersConfig(name string, providerType LiquidityProviderT
 		}
 		return json.Unmarshal(conf, dest)
 	}
-	return errors.Errorf("provider %s not found", name)
+	return errors.Errorf("providersMap %s not found", name)
 }
 
 func (c *Config) GetChainConfig(chainName string) Chain {
-	chain := c.chains[chainName]
+	chain := c.chainsMap[chainName]
 	if chain.Name == "" {
 		logrus.Panicf("chain %s not found", chainName)
 	}
@@ -392,7 +403,7 @@ func (c *Config) GetWalletConfig(wallet string) Wallet {
 }
 
 func (c *Config) GetTokenInfoOnChain(tokenName, chainName string) Token {
-	for _, token := range c.chains[chainName].Tokens {
+	for _, token := range c.chainsMap[chainName].Tokens {
 		if !strings.EqualFold(token.Name, tokenName) {
 			continue
 		}
@@ -462,10 +473,10 @@ func (c *Config) GetTaskInterval(name string, defaultInterval time.Duration) tim
 }
 
 func (c *Config) IsNativeToken(chainName, tokenName string) bool {
-	if strings.EqualFold(c.chains[chainName].NativeToken, tokenName) {
+	if strings.EqualFold(c.chainsMap[chainName].NativeToken, tokenName) {
 		return true
 	}
-	for _, token := range c.chains[chainName].Tokens {
+	for _, token := range c.chainsMap[chainName].Tokens {
 		if strings.EqualFold(token.Name, tokenName) {
 			return strings.EqualFold(token.ContractAddress, constant.ZeroAddress.Hex())
 		}

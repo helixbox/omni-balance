@@ -288,6 +288,6 @@ func (l Li) Name() string {
 	return "li"
 }
 
-func (l Li) Type() configs.LiquidityProviderType {
+func (l Li) Type() configs.ProviderType {
 	return configs.Bridge
 }

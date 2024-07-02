@@ -79,7 +79,7 @@ type Provider interface {
 	// Name get provider name
 	Name() string
 
-	Type() configs.LiquidityProviderType
+	Type() configs.ProviderType
 }
 
 type CheckParams struct {
@@ -118,16 +118,16 @@ type SwapParams struct {
 }
 
 type SwapResult struct {
-	Error            string                        `json:"error,omitempty"`
-	TokenInChainName string                        `json:"source_chain_name,omitempty"`
-	TokenInName      string                        `json:"token_in_name,omitempty"`
-	ProviderType     configs.LiquidityProviderType `json:"type,omitempty"`
-	ProviderName     string                        `json:"provider_name,omitempty"`
-	OrderId          string                        `json:"provider_order_id,omitempty"`
-	Order            interface{}                   `json:"order,omitempty"`
-	Status           TxStatus                      `json:"status,omitempty"`
-	CurrentChain     string                        `json:"current_chain_name,omitempty"`
-	Receiver         string                        `json:"receiver,omitempty"`
+	Error            string               `json:"error,omitempty"`
+	TokenInChainName string               `json:"source_chain_name,omitempty"`
+	TokenInName      string               `json:"token_in_name,omitempty"`
+	ProviderType     configs.ProviderType `json:"type,omitempty"`
+	ProviderName     string               `json:"provider_name,omitempty"`
+	OrderId          string               `json:"provider_order_id,omitempty"`
+	Order            interface{}          `json:"order,omitempty"`
+	Status           TxStatus             `json:"status,omitempty"`
+	CurrentChain     string               `json:"current_chain_name,omitempty"`
+	Receiver         string               `json:"receiver,omitempty"`
 	// Tx is the transaction hash
 	Tx string `json:"tx,omitempty"`
 }
@@ -151,7 +151,7 @@ func (s *SwapResult) SetTokenInName(name string) *SwapResult {
 	return s
 }
 
-func (s *SwapResult) SetProviderType(tp configs.LiquidityProviderType) *SwapResult {
+func (s *SwapResult) SetProviderType(tp configs.ProviderType) *SwapResult {
 	s.ProviderType = tp
 	return s
 }
@@ -246,7 +246,7 @@ func (s *SwapHistory) SetProviderName(providerName string) *SwapHistory {
 	return s
 }
 
-func (s *SwapHistory) SetProviderType(providerType configs.LiquidityProviderType) *SwapHistory {
+func (s *SwapHistory) SetProviderType(providerType configs.ProviderType) *SwapHistory {
 	s.ProviderType = string(providerType)
 	return s
 }

@@ -35,7 +35,7 @@ func (s Snowswap) Name() string {
 	panic("implement me")
 }
 
-func (s Snowswap) Type() configs.LiquidityProviderType {
+func (s Snowswap) Type() configs.ProviderType {
 	//TODO implement me
 	panic("implement me")
 }

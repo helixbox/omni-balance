@@ -115,7 +115,6 @@ func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams)
 			return errors.Wrap(err, "get quote")
 		}
 		currentLog = currentLog.WithField("quote", utils.ToMap(quoteData))
-		currentLog.Debug("get quote success")
 
 		minimumReceived := chains.WeiToEth(quoteData.Destination.TokenAmount.BigInt(), tokenOut.Decimals)
 		needBalance := tokenInTestBalance.Div(minimumReceived).Mul(args.Amount)
