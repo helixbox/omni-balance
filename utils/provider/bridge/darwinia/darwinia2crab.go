@@ -13,7 +13,7 @@ import (
 
 var (
 	darwinia2Crab = map[string]Params{
-		"RING": Params{
+		"RING": {
 			contractAddress:  common.HexToAddress("0xA8d0E9a45249Ec839C397fa0F371f5F64eCAB7F7"),
 			originalToken:    common.HexToAddress("0xE7578598Aac020abFB918f33A20faD5B71d670b4"),
 			remoteAppAddress: common.HexToAddress("0xa64D1c284280b22f921E7B2A55040C7bbfD4d9d0"),
@@ -23,7 +23,7 @@ var (
 			sourceChainId:    46,
 			targetChainId:    44,
 		},
-		"CRAB": Params{
+		"CRAB": {
 			TokenAddress:     common.HexToAddress("0x656567eb75b765fc320783cc6edd86bd854b2305"),
 			contractAddress:  common.HexToAddress(""),
 			originalToken:    common.HexToAddress("0x2D2b97EA380b0185e9fDF8271d1AFB5d2Bf18329"),

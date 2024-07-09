@@ -12,7 +12,7 @@ import (
 
 var (
 	darwinia2ethereum = map[string]Params{
-		"RING": Params{
+		"RING": {
 			contractAddress:  common.HexToAddress("0x092e19c46c9daab7824393f1cd9c22f5bea13560"),
 			originalToken:    common.HexToAddress("0xE7578598Aac020abFB918f33A20faD5B71d670b4"),
 			recipient:        common.HexToAddress("0x4CA75992d2750BEC270731A72DfDedE6b9E71cC7"),
@@ -24,7 +24,7 @@ var (
 			targetChainId:    1,
 			extData:          "000000000000000000000000c29dcb1f12a1618262ef9fba673b77140adc02d600000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000014{sender}000000000000000000000000",
 		},
-		"KTON": Params{
+		"KTON": {
 			TokenAddress:     common.HexToAddress("0x0000000000000000000000000000000000000402"),
 			contractAddress:  common.Address{}, // must replace to sender address
 			originalToken:    common.HexToAddress("0x0000000000000000000000000000000000000402"),

@@ -27,7 +27,7 @@ func transfer(ctx context.Context, order models.Order, args provider.SwapParams,
 		return true, createUpdateLog(ctx, order, result, conf, client)
 	}
 	if !errors.Is(errors.Unwrap(err), error_types.ErrInsufficientBalance) &&
-		!errors.Is(errors.Unwrap(err), error_types.ErrInsufficientLiquidity) && err != nil {
+		!errors.Is(errors.Unwrap(err), error_types.ErrInsufficientLiquidity) {
 		return false, errors.Wrap(err, "transfer not is insufficient balance")
 	}
 	return false, nil
