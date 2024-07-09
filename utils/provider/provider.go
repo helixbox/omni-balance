@@ -3,12 +3,14 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"omni-balance/utils/configs"
+	"omni-balance/utils/wallets"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
-	"omni-balance/utils/configs"
-	"omni-balance/utils/wallets"
+	"gorm.io/datatypes"
 )
 
 type TxStatus string
@@ -105,6 +107,7 @@ type BalanceParams struct {
 }
 
 type SwapParams struct {
+	Order       datatypes.JSON                     `json:"order"`
 	OrderId     uint                               `json:"order_id"`
 	SourceToken string                             `json:"source_token"`
 	SourceChain string                             `json:"source_chain"`
@@ -139,6 +142,7 @@ func (s *SwapResult) SetReciever(receiver string) *SwapResult {
 
 func (s *SwapResult) SetError(err error) *SwapResult {
 	s.Error = err.Error()
+	s.Status = TxStatusFailed
 	return s
 }
 func (s *SwapResult) SetTokenInChainName(name string) *SwapResult {
@@ -202,7 +206,7 @@ func (s SwapResult) Marshal() map[string]interface{} {
 	return result
 }
 
-func (s SwapResult) MarshalOrder() *json.RawMessage {
+func (s SwapResult) MarshalOrder() []byte {
 	if s.Order == nil {
 		return nil
 	}
@@ -210,7 +214,7 @@ func (s SwapResult) MarshalOrder() *json.RawMessage {
 	if err != nil {
 		return nil
 	}
-	return (*json.RawMessage)(&b)
+	return b
 }
 
 func (s SwapParams) GetLogs(name string) *logrus.Entry {

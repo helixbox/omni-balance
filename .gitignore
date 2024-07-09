@@ -2,6 +2,10 @@
 .vscode
 local
 .run
-./config.yaml
+*.yaml
 omni-balance.db
 start.sh
+*.json
+*.db
+*.sh
+.DS_Store

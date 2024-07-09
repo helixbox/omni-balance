@@ -2,15 +2,16 @@ package bot
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/ethclient/simulated"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"omni-balance/internal/daemons/market"
+	"omni-balance/utils"
 	"omni-balance/utils/bot"
-	"omni-balance/utils/bot/balance_on_chain"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 func Run(ctx context.Context, conf configs.Config) error {
@@ -46,29 +47,54 @@ func Run(ctx context.Context, conf configs.Config) error {
 					logrus.Debugf("ignore token %s on chain %s", token.Name, chainName)
 					continue
 				}
-				monitorType := token.MonitorTypes[chainName]
-				if monitorType == "" {
-					monitorType = balance_on_chain.BalanceOnChain{}.Name()
+				var botTypes []string
+				if len(token.BotTypes[chainName]) != 0 {
+					botTypes = append(botTypes, token.BotTypes[chainName]...)
 				}
-				fn := process(ctx, conf, wallet.Address, token.Name, chainName, monitorType, clients[chainName])
-				w.Add(1)
-				go func() {
-					defer w.Done()
-					tasks, processType, err := fn()
-					if err != nil {
-						logrus.Errorf("bot error: %s", err)
-						return
+				if len(botTypes) == 0 {
+					for _, botType := range wallet.BotTypes {
+						if botType == "" || utils.InArrayFold(botType, botTypes) {
+							continue
+						}
+						botTypes = append(botTypes, botType)
 					}
-					_, taskId, err := createOrder(tasks, processType)
-					if err != nil {
-						logrus.Errorf("create order error: %s", err)
-						return
-					}
-					market.PushTask(market.Task{
-						Id:          taskId,
-						ProcessType: processType,
-					})
-				}()
+				}
+
+				if len(botTypes) == 0 {
+					botTypes = append(botTypes, "balance_on_chain")
+				}
+
+				if !utils.InArray("helix_liquidity", botTypes) {
+					continue
+				}
+
+				for _, botType := range botTypes {
+					logrus.Debugf("start check %s on %s use %s bot", token.Name, chainName, botType)
+
+					w.Add(1)
+					go func(f func() ([]bot.Task, bot.ProcessType, error), botType string) {
+						defer w.Done()
+						tasks, processType, err := f()
+						if err != nil {
+							logrus.Errorf("bot error: %s", err)
+							return
+						}
+						if len(tasks) == 0 {
+							return
+						}
+						logrus.Infof("create %d tasks, based %s on %s using %s bot", len(tasks), tasks[0].TokenOutName,
+							tasks[0].TokenOutChainName, botType)
+						_, taskId, err := createOrder(ctx, tasks, processType)
+						if err != nil {
+							logrus.Errorf("create order error: %s", err)
+							return
+						}
+						market.PushTask(market.Task{
+							Id:          taskId,
+							ProcessType: processType,
+						})
+					}(process(ctx, conf, wallet.Address, token.Name, chainName, botType, clients[chainName]), botType)
+				}
 			}
 		}
 	}

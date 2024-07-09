@@ -1,12 +1,13 @@
 package daemons
 
 import (
-	"github.com/sirupsen/logrus"
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/provider"
 	"omni-balance/utils/wallets"
+
+	"github.com/sirupsen/logrus"
 )
 
 func CreateSwapParams(order models.Order, orderProcess models.OrderProcess, log *logrus.Entry, wallet wallets.Wallets) provider.SwapParams {
@@ -16,11 +17,12 @@ func CreateSwapParams(order models.Order, orderProcess models.OrderProcess, log 
 		Sender:      wallet,
 		Receiver:    order.Wallet,
 		TargetChain: order.TargetChainName,
-		SourceToken: order.TokenOutName,
+		SourceToken: order.TokenInName,
 		TargetToken: order.TokenOutName,
 		Amount:      order.Amount,
 		LastHistory: createLastHistory(orderProcess),
 		RecordFn:    createRecordFunction(order, log),
+		Order:       order.Order,
 	}
 }
 

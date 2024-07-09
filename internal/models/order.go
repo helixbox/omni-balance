@@ -3,13 +3,15 @@ package models
 import (
 	"context"
 	"encoding/json"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
-	"gorm.io/gorm"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/provider"
 	"sync"
+
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
+	"gorm.io/datatypes"
+	"gorm.io/gorm"
 )
 
 const (
@@ -39,10 +41,11 @@ type Order struct {
 	ProviderName     string               `json:"provider_name" gorm:"type:varchar(64)"`
 	ProviderOrderId  string               `json:"order_id" gorm:"type:varchar(64)"`
 	Tx               string               `json:"tx" gorm:"type:varchar(64)"`
-	Order            *json.RawMessage     `json:"order" gorm:"type:json;default:null"`
+	Order            datatypes.JSON       `json:"order" gorm:"default:null"`
 	Error            string               `json:"error" gorm:"type:varchar(255)"`
 	TaskId           string               `json:"task_id" gorm:"type:varchar(64)"`
 	ProcessType      string               `json:"process_type"`
+	Remark           string               `json:"remark" grom:"type:varchar(32)"`
 }
 
 type Tasks struct {
@@ -119,6 +122,7 @@ func ListOrdersByTaskId(ctx context.Context, db *gorm.DB, taskId string) ([]Orde
 	if err != nil {
 		return nil, errors.Wrap(err, "find buy tokens error")
 	}
+
 	return result, nil
 }
 

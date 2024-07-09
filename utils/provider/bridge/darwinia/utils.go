@@ -4,12 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient/simulated"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"io"
 	"math/big"
 	"net/http"
@@ -23,6 +17,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
 )
 
 // GetSourceChains returns the list of source chain IDs that support transferring the specified token to the target chain.
@@ -230,17 +231,18 @@ func FetchMsglineFeeAndParams(ctx context.Context, sourceChainId, targetChainId 
 	query.Set("refund_address", sender.Hex())
 	u.RawQuery = query.Encode()
 	type Fee struct {
-		Code int `json:"code"`
-		Data struct {
-			Fee    string `json:"fee"`
-			Params string `json:"params"`
+		Error interface{} `json:"error,omitempty"`
+		Code  int         `json:"code,omitempty"`
+		Data  struct {
+			Fee    string `json:"fee,omitempty"`
+			Params string `json:"params,omitempty"`
 			Gas    struct {
-				GasForMessagingLayer decimal.Decimal `json:"gasForMessagingLayer"`
-				GasForMsgport        decimal.Decimal `json:"gasForMsgport"`
-				Multiplier           decimal.Decimal `json:"multiplier"`
-				Total                decimal.Decimal `json:"total"`
-			} `json:"gas"`
-		} `json:"data"`
+				GasForMessagingLayer decimal.Decimal `json:"gasForMessagingLayer,omitempty"`
+				GasForMsgport        decimal.Decimal `json:"gasForMsgport,omitempty"`
+				Multiplier           decimal.Decimal `json:"multiplier,omitempty"`
+				Total                decimal.Decimal `json:"total,omitempty"`
+			} `json:"gas,omitempty"`
+		} `json:"data,omitempty"`
 	}
 	var result Fee
 	err = utils.Request(ctx, "GET", u.String(), nil, &result)
@@ -248,7 +250,7 @@ func FetchMsglineFeeAndParams(ctx context.Context, sourceChainId, targetChainId 
 		return decimal.Zero, nil, decimal.Zero, errors.Wrap(err, "request error")
 	}
 	if result.Code != 0 {
-		return decimal.Zero, nil, decimal.Zero, errors.Errorf("fetch fee error: %d", result.Code)
+		return decimal.Zero, nil, decimal.Zero, errors.Errorf("fetch fee %s error: %+v", u.String(), result.Error)
 	}
 	return decimal.RequireFromString(result.Data.Fee),
 		common.Hex2Bytes(strings.TrimPrefix(result.Data.Params, "0x")), result.Data.Gas.Total, nil

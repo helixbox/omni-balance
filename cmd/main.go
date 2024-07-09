@@ -24,6 +24,7 @@ import (
 	"omni-balance/utils/notice"
 	"omni-balance/utils/provider"
 	_ "omni-balance/utils/provider/bridge/darwinia"
+	_ "omni-balance/utils/provider/bridge/helix_liquidity_claim"
 	_ "omni-balance/utils/provider/bridge/li"
 	_ "omni-balance/utils/provider/bridge/okx"
 	_ "omni-balance/utils/provider/bridge/routernitro"
@@ -112,7 +113,9 @@ func Action(cli *cli.Context) error {
 	signal.Notify(quit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	cancel()
-	time.Sleep(time.Second * 5)
+	if os.Getenv("is_local") != "true" {
+		time.Sleep(time.Second * 5)
+	}
 	return nil
 }
 

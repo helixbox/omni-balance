@@ -20,7 +20,7 @@ func init() {
 		Description:     "Responsible for obtaining the token price, denominated in USDT.",
 		TaskFunc:        Run,
 		DefaultInterval: time.Minute * 3,
-		RunOnStart:      true,
+		// RunOnStart:      true,
 	})
 }
 

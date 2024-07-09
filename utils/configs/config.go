@@ -3,16 +3,17 @@ package configs
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"omni-balance/utils"
 	"omni-balance/utils/constant"
 	"omni-balance/utils/wallets"
 	"strings"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
 )
 
 // ProviderType liquidity providersMap type
@@ -76,8 +77,13 @@ type Chain struct {
 }
 
 type Wallet struct {
+	// BotTypes The type of monitoring, support: balance_on_chain, helix_liquidity, the default is balance_on_chain.
+	// If BotTypes is not empty and tokens.BotTypes is empty, then use BotTypes.
+	// If BotTypes is empty and tokens.BotTypes is not empty, then use tokens.BotTypes.
+	// If multiple types are set in BotTypes, multiple bots will be created according to the types.
+	BotTypes      []string      `json:"monitor_types" yaml:"botTypes" comment:"BotTypes The type of monitoring, support: balance_on_chain, helix_liquidity, the default is balance_on_chain.\n If BotTypes is not empty and tokens.BotTypes is empty, then use BotTypes.\n If BotTypes is empty and tokens.BotTypes is not empty, then use tokens.BotTypes.\n If multiple types are set in BotTypes, multiple bots will be created according to the types."`
 	Address       string        `json:"address" yaml:"address" comment:"Monitoring address"`
-	Operator      Operator      `json:"operator" yaml:"operator" comment:"Used to isolate the monitoring address and the operation address, preventing the leakage of the monitoring address private key. If Operator is empty, it is not enabled. If 'multi_sign_type' is not empty, 'address' is multi sign address, 'operator' is multi sign operator address"`
+	Operator      Operator      `json:"operator" yaml:"operator" comment:"Used to isolate the monitoring address and the operation address, preventing the leakage of the monitoring address private key. If Operator is empty, it is not enabled. If 'multi_sign_type' is not empty, 'address' is multi sign address, 'operator' is multi sign operator address."`
 	MultiSignType string        `json:"multi_sign_type" yaml:"multi_sign_type" comment:"multi sign address type, support: safe. If not empty, 'address' is multi sign address, 'operator' is multi sign operator address"`
 	Tokens        []WalletToken `json:"tokens" yaml:"tokens" comment:"Tokens to be monitored"`
 	PrivateKey    string        `json:"private_key" yaml:"private_key" comment:"'address' private key. If 'operator' is not empty, private_key is the operator's private key"`
@@ -92,11 +98,11 @@ type Operator struct {
 }
 
 type WalletToken struct {
-	Name         string            `json:"name" yaml:"name" comment:"Token name"`
-	Amount       decimal.Decimal   `json:"amount" yaml:"amount" comment:"The number of each rebalance"`
-	Threshold    decimal.Decimal   `json:"threshold" yaml:"threshold" comment:"Threshold when the token balance is less than the threshold, the rebalance will be triggered"`
-	Chains       []string          `json:"chains" yaml:"chains" comment:"The chains need to be monitored"`
-	MonitorTypes map[string]string `json:"monitorTypes" yaml:"monitorTypes" comment:"Which monitoring type should this token use on the specified chain. Default: 'balance_on_chain'. Support types: balance_on_chain='The real balance of the address on the chain''"`
+	Name      string              `json:"name" yaml:"name" comment:"Token name"`
+	Amount    decimal.Decimal     `json:"amount" yaml:"amount" comment:"The number of each rebalance"`
+	Threshold decimal.Decimal     `json:"threshold" yaml:"threshold" comment:"Threshold when the token balance is less than the threshold, the rebalance will be triggered"`
+	Chains    []string            `json:"chains" yaml:"chains" comment:"The chains need to be monitored"`
+	BotTypes  map[string][]string `json:"botTypes" yaml:"botTypes" comment:"BotTypes The monitoring type of this token on the specified chain, supporting balance_on_chain, helix_liquidity, and the default is balance_on_chain.\n The key is the chain name, and the value is the monitoring types on this chain.Example: {\"arbitrum\":[\"balance_on_chain\", \"helix_liquidity\"]}"`
 }
 
 type CrossChain struct {
@@ -210,25 +216,25 @@ func (c *Config) Init() *Config {
 	for walletIndex, v := range c.Wallets {
 		for index, t := range v.Tokens {
 			var (
-				chains       []string
-				monitorTypes = make(map[string]string)
+				chains   []string
+				BotTypes = make(map[string][]string)
 			)
 			for _, v := range t.Chains {
 				if newName, ok := oldName2NewName[v]; ok {
 					chains = append(chains, newName)
 					continue
 				}
-				panic(fmt.Sprintf("chain %s not found", v))
+				panic(fmt.Sprintf("chain %s not found in chains configs", v))
 			}
-			for name, v := range t.MonitorTypes {
-				if newName, ok := oldName2NewName[v]; ok {
-					monitorTypes[name] = newName
+			for name := range t.BotTypes {
+				if newName, ok := oldName2NewName[name]; ok {
+					BotTypes[newName] = t.BotTypes[name]
 					continue
 				}
-				panic(fmt.Sprintf("chain %s not found", v))
+				panic(fmt.Sprintf("chain %s not found", name))
 			}
 			c.Wallets[walletIndex].Tokens[index].Chains = chains
-			c.Wallets[walletIndex].Tokens[index].MonitorTypes = monitorTypes
+			c.Wallets[walletIndex].Tokens[index].BotTypes = BotTypes
 		}
 		c.wallets[v.Address] = c.Wallets[walletIndex]
 	}
@@ -380,8 +386,7 @@ func (c *Config) GetTokenThreshold(wallet, tokenName, chain string) decimal.Deci
 			return token.Threshold
 		}
 	}
-	logrus.Fatalf("token %s not found on chain %s", tokenName, chain)
-	return decimal.Zero
+	panic(fmt.Sprintf("token %s not found on chain %s", tokenName, chain))
 }
 
 func (c *Config) GetWallet(wallet string) wallets.Wallets {
@@ -409,8 +414,20 @@ func (c *Config) GetTokenInfoOnChain(tokenName, chainName string) Token {
 		}
 		return token
 	}
-	logrus.Fatalf("token %s not found on chain %s", tokenName, chainName)
-	return Token{}
+	panic(fmt.Sprintf("token %s not found on chain %s", tokenName, chainName))
+}
+
+func (c *Config) GetTokenInfoOnChainByAddress(tokenAddress, chainName string, force ...bool) Token {
+	for _, token := range c.chainsMap[chainName].Tokens {
+		if !strings.EqualFold(token.ContractAddress, tokenAddress) {
+			continue
+		}
+		return token
+	}
+	if len(force) != 0 && force[0] {
+		return Token{}
+	}
+	panic(fmt.Sprintf("token %s not found on chain %s", tokenAddress, chainName))
 }
 
 func (c *Config) GetTokenPurchaseAmount(wallet, tokenName, chain string) decimal.Decimal {
@@ -422,8 +439,7 @@ func (c *Config) GetTokenPurchaseAmount(wallet, tokenName, chain string) decimal
 			return token.Amount
 		}
 	}
-	logrus.Fatalf("token %s not found on chain %s", tokenName, chain)
-	return decimal.Zero
+	panic(fmt.Sprintf("token %s not found on chain %s", tokenName, chain))
 }
 
 func (c *Config) GetTokenAddress(tokenName, chainName string) string {
@@ -443,7 +459,7 @@ func (c *Config) GetSourceTokenNamesByChain(chainName string) []string {
 		result = append(result, v.Name)
 	}
 	if len(result) == 0 {
-		logrus.Fatalf("source token not found on chain %s", chainName)
+		panic(fmt.Sprintf("source token not found on chain %s", chainName))
 	}
 	return result
 }

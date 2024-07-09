@@ -49,4 +49,5 @@ type Task struct {
 	ProviderType      configs.ProviderType `json:"provider_type" gorm:"type:varchar(64)"`
 	ProviderName      string               `json:"provider_name" gorm:"type:varchar(64)"`
 	Order             interface{}          `json:"order"`
+	Remark            string               `json:"remark" grom:"type:varchar(32)"`
 }

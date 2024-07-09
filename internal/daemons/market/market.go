@@ -153,8 +153,7 @@ func do(ctx context.Context, order models.Order, conf configs.Config) {
 			)
 			return
 		}
-		log.Errorf(" order #%d error: %s, retry after 10 second", order.ID, err)
-		time.Sleep(time.Second * 10)
+		log.Errorf(" order #%d error: %s", order.ID, err)
 		return
 	}
 	removeOrderError(order.ID)
@@ -197,7 +196,9 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 		return errors.Wrap(err, "new evm client error")
 	}
 	defer client.Close()
-	if wallet.IsDifferentAddress() || order.Status == models.OrderStatusWaitTransferFromOperator {
+	if (wallet.IsDifferentAddress() || order.Status == models.OrderStatusWaitTransferFromOperator) &&
+		!utils.InArrayFold(order.Status.String(), []string{"", "direct"}) &&
+		!utils.InArrayFold(order.ProviderName, []string{"", "transfer"}) {
 		ok, err := transfer(ctx, order, args, conf, client)
 		if err != nil && ok {
 			return errors.Wrap(err, "transfer error")

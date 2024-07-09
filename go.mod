@@ -13,11 +13,11 @@ require (
 	github.com/go-openapi/swag v0.23.0
 	github.com/go-openapi/validate v0.24.0
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/websocket v1.5.1
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/jinzhu/copier v0.4.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
+	github.com/satori/go.uuid v1.2.0
 	github.com/shopspring/decimal v1.4.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cast v1.6.0
@@ -26,6 +26,7 @@ require (
 	github.com/urfave/cli/v2 v2.27.2
 	github.com/zwgblue/yaml-encoder v0.0.0-20221226083717-a0bdbda0d998
 	golang.org/x/exp v0.0.0-20240318143956-a85f2c67cd81
+	gorm.io/datatypes v1.2.1
 	gorm.io/driver/mysql v1.5.6
 	gorm.io/driver/postgres v1.5.7
 	gorm.io/gorm v1.25.10
@@ -77,6 +78,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
 	github.com/google/pprof v0.0.0-20240320155624-b11c3daa6f07 // indirect
+	github.com/gorilla/websocket v1.5.1 // indirect
 	github.com/hashicorp/go-bexpr v0.1.10 // indirect
 	github.com/holiman/billy v0.0.0-20240216141850-2abb0c79d3c4 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
@@ -115,7 +117,6 @@ require (
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
-	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
 	github.com/status-im/keycard-go v0.2.0 // indirect
 	github.com/supranational/blst v0.3.11 // indirect

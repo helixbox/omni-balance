@@ -28,11 +28,11 @@ const (
 	Kava         = "kava"
 	ZkLinkNova   = "zkLink-nova"
 	Rootstock    = "rootstock"
-	ZkSync       = "zkSync"
 	Astar        = "astar"
 	OpBNB        = "opBNB"
 	Bnb          = "bnb"
 	Celo         = "celo"
+	Moonbeam     = "moonbeam"
 )
 
 const (
@@ -43,6 +43,7 @@ const (
 
 var (
 	chainName2Id = map[string]int{
+		Moonbeam:     1284,
 		Sepolia:      11155111,
 		Zksync:       324,
 		Polygon:      137,
@@ -68,7 +69,6 @@ var (
 		Kava:         2222,
 		ZkLinkNova:   810180,
 		Rootstock:    30,
-		ZkSync:       324,
 		Astar:        592,
 		OpBNB:        204,
 		Bnb:          56,

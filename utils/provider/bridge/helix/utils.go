@@ -74,6 +74,8 @@ func (b *Bridge) RetrieveHistoryRecords(sender common.Address, tx common.Hash) (
 	return record, nil
 }
 
+//func (b *Bridge)QueryLiquidity
+
 func (b *Bridge) IsValidRecord(record HistoryRecord) (string, bool) {
 	if record.ResponseTxHash == "" {
 		return "waiting for bridge", false
@@ -296,9 +298,9 @@ func GetSortedLnBridgeRelayInfos(amount decimal.Decimal, decimals int32, fromCha
 }
 
 type HistoryRecordsParams struct {
-	OperationName string                  `json:"operationName"`
-	Variables     HistoryRecordsVariables `json:"variables"`
-	Query         string                  `json:"query"`
+	OperationName string                  `json:"operationName,omitempty"`
+	Variables     HistoryRecordsVariables `json:"variables,omitempty"`
+	Query         string                  `json:"query,omitempty"`
 }
 
 type HistoryRecordsVariables struct {

@@ -1,15 +1,11 @@
 package utils
 
 import (
+	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
-	"golang.org/x/exp/constraints"
-	"golang.org/x/exp/rand"
 	"io"
 	"math/big"
 	"net/http"
@@ -20,6 +16,13 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/exp/constraints"
+	"golang.org/x/exp/rand"
+	"gorm.io/datatypes"
 )
 
 var (
@@ -228,7 +231,7 @@ func Recover() {
 	}
 }
 
-func Object2JsonRawMessage(v interface{}) *json.RawMessage {
+func Object2Json(v interface{}) datatypes.JSON {
 	if v == nil {
 		return nil
 	}
@@ -236,5 +239,25 @@ func Object2JsonRawMessage(v interface{}) *json.RawMessage {
 	if err != nil {
 		return nil
 	}
-	return (*json.RawMessage)(&data)
+	return data
+}
+
+func StringSliceToBytes32Slice(strings []string) [][32]byte {
+	var result [][32]byte
+	for _, str := range strings {
+		paddedStr := PadStringTo32Bytes(str)
+		var bytes32 [32]byte
+		copy(bytes32[:], paddedStr)
+		result = append(result, bytes32)
+	}
+	return result
+}
+
+func PadStringTo32Bytes(str string) []byte {
+	var buffer bytes.Buffer
+	buffer.WriteString(str)
+	for buffer.Len() < 32 {
+		buffer.WriteString("\x00")
+	}
+	return buffer.Bytes()
 }

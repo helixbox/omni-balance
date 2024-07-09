@@ -3,18 +3,6 @@ package safe
 import (
 	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient/simulated"
-	"github.com/ethereum/go-ethereum/signer/core/apitypes"
-	httptransport "github.com/go-openapi/runtime/client"
-	"github.com/go-openapi/strfmt"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cast"
 	"math/big"
 	"net/url"
 	"omni-balance/utils"
@@ -28,6 +16,19 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+	httptransport "github.com/go-openapi/runtime/client"
+	"github.com/go-openapi/strfmt"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cast"
 )
 
 var (
@@ -160,6 +161,17 @@ func (s *Safe) MultisigTransaction(ctx context.Context, tx *types.LegacyTx, clie
 	if err == nil && s.GetAddress().Cmp(to) == 0 {
 		log.Debugf("transfer to self")
 		return s.Transfer(ctx, tx, client)
+	}
+
+	_, err = client.EstimateGas(ctx, ethereum.CallMsg{
+		From:  s.GetAddress(),
+		To:    tx.To,
+		Value: tx.Value,
+		Data:  tx.Data,
+	})
+	if err != nil {
+		log.Debugf("estimate gas error: %s", err.Error())
+		return common.Hash{}, errors.Wrap(err, "estimate gas error")
 	}
 
 	info, err := s.safeWalletInfo(ctx)
