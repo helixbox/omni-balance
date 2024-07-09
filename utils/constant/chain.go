@@ -39,6 +39,7 @@ const (
 	ChainNameKeyInCtx    ContextKey = "chain_name"
 	LogKeyInCtx          ContextKey = "log"
 	NoticeFieldsKeyInCtx ContextKey = "notice_fields"
+	FeeTestKeyInCtx      ContextKey = "fee_test"
 )
 
 var (

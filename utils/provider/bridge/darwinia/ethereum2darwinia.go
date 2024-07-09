@@ -89,6 +89,9 @@ func Ethereum2darwinia(ctx context.Context, args SwapParams) (tx *types.LegacyTx
 	if err != nil {
 		return nil, errors.Wrap(err, "FetchMsglineFeeAndParams")
 	}
+	if ctx.Value(constant.FeeTestKeyInCtx) != nil { // for test
+		fee = ctx.Value(constant.FeeTestKeyInCtx).(decimal.Decimal)
+	}
 
 	if strings.EqualFold(tokenConf.contractAddress.Hex(), constant.ZeroAddress.Hex()) {
 		contractAddress = tokenConf.remoteAppAddress

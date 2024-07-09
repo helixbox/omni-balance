@@ -82,6 +82,10 @@ func Darwinia2ethereum(ctx context.Context, args SwapParams) (tx *types.LegacyTx
 		return nil, errors.Wrap(err, "fetchMsglineFeeAndParams")
 	}
 
+	if ctx.Value(constant.FeeTestKeyInCtx) != nil { // for test
+		fee = ctx.Value(constant.FeeTestKeyInCtx).(decimal.Decimal)
+	}
+
 	if isNativeToken {
 		data, err = WTokenLockAndXIssue(tokenConf.targetChainId, tokenConf.recipient, realWallet,
 			args.Amount, args.Nonce, common.Bytes2Hex(extData), common.Bytes2Hex(param))

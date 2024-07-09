@@ -1,12 +1,15 @@
 package darwinia
 
 import (
+	"context"
+	"omni-balance/utils"
+	"omni-balance/utils/chains"
+	"omni-balance/utils/constant"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"omni-balance/utils"
-	"omni-balance/utils/chains"
-	"testing"
 )
 
 func TestCrab2Darwinia(t *testing.T) {
@@ -14,6 +17,7 @@ func TestCrab2Darwinia(t *testing.T) {
 		args   = InitVar(t)
 		amount = decimal.NewFromBigInt(chains.EthToWei(decimal.RequireFromString("0")), 0)
 	)
+	args.ctx = context.WithValue(args.ctx, constant.FeeTestKeyInCtx, decimal.RequireFromString("1"))
 	tx, err := Crab2Darwinia(args.ctx, SwapParams{
 		Sender:    args.sender,
 		TokenName: "CRAB",

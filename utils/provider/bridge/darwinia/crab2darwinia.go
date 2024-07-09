@@ -95,6 +95,9 @@ func Crab2Darwinia(ctx context.Context, args SwapParams) (tx *types.LegacyTx, er
 	if err != nil {
 		return nil, errors.Wrap(err, "fetchMsglineFeeAndParams")
 	}
+	if ctx.Value(constant.FeeTestKeyInCtx) != nil { // for test
+		fee = ctx.Value(constant.FeeTestKeyInCtx).(decimal.Decimal)
+	}
 	if isNativeToken {
 		data, err = WTokenLockAndXIssue(conf.targetChainId,
 			wallet.GetAddress(true), wallet.GetAddress(true), args.Amount, args.Nonce, "", common.Bytes2Hex(param))
