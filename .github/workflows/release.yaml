@@ -30,10 +30,6 @@ jobs:
           echo "last_commit_time=$last_commit_time" >> $GITHUB_ENV
           echo "Last commit time is $last_commit_time"
 
-          last_commit_message=$(git log -1 --format=%B)
-          echo "last_commit_message=$last_commit_message" >> $GITHUB_ENV
-          echo "Last commit message is $last_commit_message"
-
       - name: Build and push Docker images
         uses: docker/build-push-action@v5
         with:
@@ -42,11 +38,9 @@ jobs:
           build-args: |
             VERSION=${{ env.GIT_TAG_NAME }}
             COMMIT_TIME=${{ env.last_commit_time }}
-            COMMIT_MESSAGE="${{ env.last_commit_message }}"
           labels: |
             org.opencontainers.image.version=${{ env.GIT_TAG_NAME }}
             org.opencontainers.image.created=${{ env.last_commit_time }}
-            org.opencontainers.image.revision="${{ env.last_commit_message }}"
           tags: |
             ghcr.io/${{ github.repository }}:latest
             ghcr.io/${{ github.repository }}:${{ env.GIT_TAG_NAME }}
@@ -71,9 +65,6 @@ jobs:
           echo "last_commit_time=$last_commit_time" >> $GITHUB_ENV
           echo "Last commit time is $last_commit_time"
 
-          last_commit_message=$(git log -1 --format=%B)
-          echo "last_commit_message=$last_commit_message" >> $GITHUB_ENV
-          echo "Last commit message is $last_commit_message"
 
       - uses: wangyoucao577/go-release-action@v1
         env:
@@ -86,5 +77,5 @@ jobs:
           project_path: "./cmd"
           executable_compression: upx
           sha256sum: true
-          ldflags: "-X 'main.version=${{ env.GIT_TAG_NAME }}' -X 'main.commitMessage=${{env.last_commit_message}}' -X 'main.commitTime=${{env.last_commit_time}}' -s -w -extldflags '-static'"
+          ldflags: "-X 'main.version=${{ env.GIT_TAG_NAME }}' -X 'main.commitTime=${{env.last_commit_time}}' -s -w -extldflags '-static'"
           binary_name: "omni-balance"
