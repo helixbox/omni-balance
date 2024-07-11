@@ -111,7 +111,7 @@ func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams)
 			FromTokenAddress: common.HexToAddress(tokenIn.ContractAddress),
 		})
 		if err != nil {
-			logrus.Debugf("get quote error: %s", err)
+			currentLog.Debugf("get quote error: %s", err)
 			return err
 		}
 		if len(quote.RouterList) == 0 {
@@ -155,7 +155,7 @@ func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams)
 		}
 	}
 
-	for _, sourceToken := range o.conf.SourceToken {
+	for _, sourceToken := range o.conf.SourceTokens {
 		for _, v := range sourceToken.Chains {
 			if strings.EqualFold(v, args.TargetChain) && sourceToken.Name == args.TargetToken {
 				continue

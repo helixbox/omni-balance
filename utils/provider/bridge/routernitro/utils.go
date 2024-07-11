@@ -60,6 +60,23 @@ func (r Routernitro) BuildTx(ctx context.Context, quote Quote, sender, receiver 
 		quoteData["receiverAddress"] = sender.Hex()
 	}
 	quoteData["senderAddress"] = sender.Hex()
+	if quote.BridgeFee.Symbol == "" {
+		delete(quoteData, "bridgeFee")
+		quoteData["bridgeFee"] = map[string]string{}
+	}
+
+	if quote.Source.StableReserveAsset.Symbol == "" {
+		data := quoteData["source"].(map[string]interface{})
+		delete(data, "stableReserveAsset")
+		quoteData["source"] = data
+	}
+
+	if quote.Destination.StableReserveAsset.Symbol == "" {
+		data := quoteData["destination"].(map[string]interface{})
+		delete(data, "stableReserveAsset")
+		quoteData["destination"] = data
+	}
+
 	var body = bytes.NewBuffer(nil)
 	_ = json.NewEncoder(body).Encode(quoteData)
 	var result Txn
@@ -151,7 +168,7 @@ func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams)
 		return
 	}
 
-	for _, sourceToken := range r.conf.SourceToken {
+	for _, sourceToken := range r.conf.SourceTokens {
 		for _, v := range sourceToken.Chains {
 			if strings.EqualFold(v, args.TargetChain) && sourceToken.Name == args.TargetToken {
 				continue
