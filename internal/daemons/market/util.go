@@ -2,19 +2,21 @@ package market
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient/simulated"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
 	"omni-balance/utils"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/provider"
+	"omni-balance/utils/provider/bridge/darwinia"
 	"omni-balance/utils/wallets"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -87,7 +89,7 @@ func getBestProvider(ctx context.Context, order models.Order, conf configs.Confi
 	providers := provider.ListProvidersByConfig(conf)
 	for _, providerFns := range providers {
 		for _, providerFn := range providerFns {
-			p, err := provider.InitializeBridge(providerFn, conf)
+			p, err := provider.Init(providerFn, conf)
 			if err != nil {
 				log.Debugf("init provider error: %s", err.Error())
 				continue
@@ -138,6 +140,10 @@ func getBestProvider(ctx context.Context, order models.Order, conf configs.Confi
 			log.Warnf("find token price error: %s", err.Error())
 			continue
 		}
+		// if token out is RING and provider is darwinia, then use darwinia as the provider
+		if order.TokenOutName == "RING" && canUseProvider.provider.Name() == new(darwinia.Bridge).Name() {
+			return canUseProvider.provider, nil
+		}
 
 		for name, v := range tokenName2Price {
 			log.Debugf("token %s price %s on %s", name, v.String(), canUseProvider.provider.Name())
@@ -166,12 +172,13 @@ func getBestProvider(ctx context.Context, order models.Order, conf configs.Confi
 func providerSupportsOrder(ctx context.Context, p provider.Provider, order models.Order,
 	conf configs.Config, log *logrus.Entry) (provider.TokenInCosts, bool) {
 	tokenInCosts, err := p.GetCost(ctx, provider.SwapParams{
-		SourceToken: order.TokenInName,
-		Sender:      conf.GetWallet(order.Wallet),
-		TargetToken: order.TokenOutName,
-		Receiver:    order.Wallet,
-		TargetChain: order.TargetChainName,
-		Amount:      order.Amount,
+		SourceToken:      order.TokenInName,
+		Sender:           conf.GetWallet(order.Wallet),
+		TargetToken:      order.TokenOutName,
+		Receiver:         order.Wallet,
+		TargetChain:      order.TargetChainName,
+		Amount:           order.Amount,
+		SourceChainNames: order.TokenInChainNames,
 	})
 	if err != nil {
 		log.Debugf("check token %s on %s use %s error: %s", order.TokenOutName, order.TargetChainName, p.Name(), err.Error())

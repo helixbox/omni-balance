@@ -41,7 +41,7 @@ func (b BalanceOnChain) Check(ctx context.Context, args bot.Params) ([]bot.Task,
 	}
 	threshold := config.GetTokenThreshold(info.Wallet.GetAddress().Hex(), info.TokenName, info.Chain)
 	if balance.GreaterThan(threshold) {
-		log.Debugf("balance on chain is enough, balance: %s;threshold: %s", balance.String(), threshold.String())
+		log.Debugf("%s balance on %s chain is enough, balance: %s;threshold: %s", info.TokenName, info.Chain, balance.String(), threshold.String())
 		return nil, "", nil
 	}
 	amount := config.GetTokenPurchaseAmount(info.Wallet.GetAddress().Hex(), info.TokenName, info.Chain)

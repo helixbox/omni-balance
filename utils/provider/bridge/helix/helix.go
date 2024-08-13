@@ -2,15 +2,16 @@ package helix
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/constant"
 	"omni-balance/utils/provider"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
 )
 
 type Bridge struct {
@@ -55,7 +56,7 @@ func (b *Bridge) Swap(ctx context.Context, args provider.SwapParams) (result pro
 
 	if args.SourceChain == "" {
 		sourceChainId, err := b.GetSourceChain(ctx, args.TargetChain, args.TargetToken,
-			wallet.GetAddress(true).Hex(), args.Amount)
+			wallet.GetAddress(true).Hex(), args.Amount, args.SourceChainNames...)
 		if err != nil {
 			return result, errors.Wrap(err, "get source chain")
 		}
@@ -200,7 +201,7 @@ func (b *Bridge) GetCost(ctx context.Context, args provider.SwapParams) (provide
 
 	if args.SourceChain == "" {
 		sourceChainId, err := b.GetSourceChain(ctx, args.TargetChain, args.TargetToken,
-			args.Sender.GetAddress(true).Hex(), args.Amount)
+			args.Sender.GetAddress(true).Hex(), args.Amount, args.SourceChainNames...)
 		if err != nil {
 			return nil, err
 		}

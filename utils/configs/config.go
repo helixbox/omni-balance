@@ -83,6 +83,7 @@ type Wallet struct {
 	// BotTypes The type of monitoring, support: balance_on_chain, helix_liquidity, gate_liquidity, the default is balance_on_chain.
 	BotTypes      []BotConfig   `json:"bot_types" yaml:"botTypes" comment:"BotTypes The type of monitoring, support: balance_on_chain, helix_liquidity, gate_liquidity, the default is balance_on_chain."`
 	Address       string        `json:"address" yaml:"address" comment:"Monitoring address"`
+	Mode          string        `json:"mode" yaml:"mode" comment:"rebalance mode, support: balance, swap. balance: no swap, only transfer token on chain; swap: swap token on chain"`
 	Operator      Operator      `json:"operator" yaml:"operator" comment:"Used to isolate the monitoring address and the operation address, preventing the leakage of the monitoring address private key. If Operator is empty, it is not enabled. If 'multi_sign_type' is not empty, 'address' is multi sign address, 'operator' is multi sign operator address."`
 	MultiSignType string        `json:"multi_sign_type" yaml:"multiSignType" comment:"multi sign address type, support: safe. If not empty, 'address' is multi sign address, 'operator' is multi sign operator address"`
 	Tokens        []WalletToken `json:"tokens" yaml:"tokens" comment:"Tokens to be monitored"`
@@ -423,7 +424,7 @@ func (c *Config) GetProvidersConfig(name string, providerType ProviderType, dest
 func (c *Config) GetChainConfig(chainName string) Chain {
 	chain := c.chainsMap[chainName]
 	if chain.Name == "" {
-		logrus.Panicf("chain %s not found", chainName)
+		logrus.Panicf("chain %s not found, config: %+v", chainName, c.chainsMap)
 	}
 	return chain
 }
@@ -458,6 +459,27 @@ func (c *Config) GetWalletConfig(wallet string) Wallet {
 	return c.wallets[wallet]
 }
 
+func (c *Config) GetWalletMode(wallet string) string {
+	switch strings.ToLower(c.wallets[wallet].Mode) {
+	case "balance":
+		return "balance"
+	case "swap":
+		return "swap"
+	default:
+		return "balance"
+	}
+}
+
+func (c *Config) GetWalletTokenInfo(wallet, tokenName string) WalletToken {
+	for _, token := range c.GetWalletConfig(wallet).Tokens {
+		if !strings.EqualFold(token.Name, tokenName) {
+			continue
+		}
+		return token
+	}
+	panic(fmt.Sprintf("token %s not found on wallet %s", tokenName, wallet))
+}
+
 func (c *Config) GetTokenInfoOnChain(tokenName, chainName string) Token {
 	for _, token := range c.chainsMap[chainName].Tokens {
 		if !strings.EqualFold(token.Name, tokenName) {
@@ -466,6 +488,16 @@ func (c *Config) GetTokenInfoOnChain(tokenName, chainName string) Token {
 		return token
 	}
 	panic(fmt.Sprintf("token %s not found on chain %s", tokenName, chainName))
+}
+
+func (c *Config) GetTokenInfoOnChainNil(tokenName, chainName string) Token {
+	for _, token := range c.chainsMap[chainName].Tokens {
+		if !strings.EqualFold(token.Name, tokenName) {
+			continue
+		}
+		return token
+	}
+	return Token{}
 }
 
 func (c *Config) GetTokenInfoOnChainByAddress(tokenAddress, chainName string, force ...bool) Token {
@@ -511,6 +543,20 @@ func (c *Config) GetSourceTokenNamesByChain(chainName string) []string {
 	}
 	if len(result) == 0 {
 		panic(fmt.Sprintf("source token not found on chain %s", chainName))
+	}
+	return result
+}
+
+func (c *Config) GetSourceTokenNamesByChainNil(chainName string) []string {
+	var result []string
+	for _, v := range c.SourceTokens {
+		if !utils.InArray(chainName, v.Chains) {
+			continue
+		}
+		result = append(result, v.Name)
+	}
+	if len(result) == 0 {
+		return nil
 	}
 	return result
 }

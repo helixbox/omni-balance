@@ -2,12 +2,13 @@ package darwinia
 
 import (
 	"context"
+	"omni-balance/utils/constant"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"omni-balance/utils/constant"
-	"strings"
 )
 
 var (
@@ -91,6 +92,12 @@ func Ethereum2darwinia(ctx context.Context, args SwapParams) (tx *types.LegacyTx
 	}
 	if ctx.Value(constant.FeeTestKeyInCtx) != nil { // for test
 		fee = ctx.Value(constant.FeeTestKeyInCtx).(decimal.Decimal)
+	}
+
+	if args.OnlyFee {
+		return &types.LegacyTx{
+			Value: fee.BigInt(),
+		}, nil
 	}
 
 	if strings.EqualFold(tokenConf.contractAddress.Hex(), constant.ZeroAddress.Hex()) {

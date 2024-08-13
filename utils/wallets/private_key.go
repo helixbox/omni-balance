@@ -210,3 +210,7 @@ func (p *PrivateKeyWallet) SignRawMessage(msg []byte) (sig []byte, err error) {
 func (p *PrivateKeyWallet) GetRealHash(_ context.Context, txHash common.Hash, _ simulated.Client) (common.Hash, error) {
 	return txHash, nil
 }
+
+func (p *PrivateKeyWallet) Name(_ context.Context) string {
+	return "private_key"
+}

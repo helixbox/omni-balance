@@ -2,10 +2,6 @@ package darwinia
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient/simulated"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
@@ -14,6 +10,11 @@ import (
 	"omni-balance/utils/provider"
 	"omni-balance/utils/wallets"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 )
 
 var (
@@ -50,6 +51,7 @@ type SwapParams struct {
 	TokenName string
 	Amount    decimal.Decimal
 	Nonce     int64
+	OnlyFee   bool
 	Client    simulated.Client
 }
 
@@ -108,21 +110,46 @@ func (b *Bridge) GetCost(ctx context.Context, args provider.SwapParams) (provide
 	}
 	if args.SourceChain == "" {
 		sourceChains := b.FindValidSourceChains(ctx, constant.GetChainId(args.TargetChain), args.TargetToken,
-			args.Sender.GetAddress(true).Hex(), args.Amount)
+			args.Sender.GetAddress(true).Hex(), args.Amount, args.SourceChainNames...)
 		if len(sourceChains) == 0 {
 			return nil, error_types.ErrUnsupportedTokenAndChain
 		}
 		args.SourceChain = constant.GetChainName(utils.Choose(sourceChains))
 	}
-
+	var sourceTokenDecimals int32
 	if args.SourceToken == "" {
 		args.SourceToken = b.config.GetTokenInfoOnChain(args.TargetToken, args.SourceChain).Name
+		sourceTokenDecimals = b.config.GetTokenInfoOnChain(args.TargetToken, args.SourceChain).Decimals
 	}
 
+	sourceChainConf := b.config.GetChainConfig(args.SourceChain)
+	targetChainConf := b.config.GetChainConfig(args.TargetChain)
+
+	ctx = context.WithValue(ctx, constant.ChainNameKeyInCtx, args.SourceChain)
+	fn := BRIDGE_DIRECTION[int64(sourceChainConf.Id)][int64(targetChainConf.Id)]
+	if fn == nil {
+		return nil, errors.Errorf("not support swap %s to %s", args.SourceChain, args.TargetChain)
+	}
+	ethClient, err := chains.NewTryClient(ctx, sourceChainConf.RpcEndpoints)
+	if err != nil {
+		return nil, errors.Wrap(err, "dial rpc")
+	}
+	defer ethClient.Close()
+	tx, err := fn(ctx, SwapParams{
+		Sender:    args.Sender,
+		TokenName: args.SourceToken,
+		Amount:    decimal.NewFromBigInt(chains.EthToWei(args.Amount, sourceTokenDecimals), 0),
+		Nonce:     time.Now().UnixMilli(),
+		Client:    ethClient,
+		OnlyFee:   true,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "swap")
+	}
 	return provider.TokenInCosts{
 		provider.TokenInCost{
 			TokenName:  args.SourceToken,
-			CostAmount: args.Amount,
+			CostAmount: args.Amount.Add(chains.WeiToEth(tx.Value, sourceTokenDecimals)),
 		},
 	}, nil
 }
@@ -163,7 +190,7 @@ func (b *Bridge) Swap(ctx context.Context, args provider.SwapParams) (result pro
 	ctx = context.WithValue(ctx, constant.ChainNameKeyInCtx, args.SourceChain)
 	if actionNumber == 0 && args.SourceChain == "" {
 		validSourceChain := b.GetValidSourceChain(ctx, constant.GetChainId(args.TargetChain),
-			args.TargetToken, args.Sender.GetAddress(true).Hex(), args.Amount)
+			args.TargetToken, args.Sender.GetAddress(true).Hex(), args.Amount, args.SourceChainNames...)
 		if validSourceChain == 0 {
 			return result, errors.Errorf("can not find source chain for %s %s", args.TargetToken, args.TargetChain)
 		}
@@ -191,7 +218,7 @@ func (b *Bridge) Swap(ctx context.Context, args provider.SwapParams) (result pro
 		Tx:           history.Tx,
 	}
 	isActionSuccess := history.Status == string(provider.TxStatusSuccess)
-
+	ctx = context.WithValue(ctx, constant.ChainNameKeyInCtx, args.SourceChain)
 	fn := BRIDGE_DIRECTION[int64(sourceChainConf.Id)][int64(targetChainConf.Id)]
 	if fn == nil {
 		err = errors.Errorf("not support swap %s to %s", args.SourceChain, args.TargetChain)
@@ -235,7 +262,6 @@ func (b *Bridge) Swap(ctx context.Context, args provider.SwapParams) (result pro
 			TokenOutAmount:  args.Amount,
 			TransactionType: provider.TransferTransactionAction,
 		})
-
 		txHash, err := args.Sender.SendTransaction(ctx, tx, ethClient)
 		if err != nil {
 			recordFn(sh.SetActions(sourceChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)

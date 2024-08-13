@@ -46,6 +46,8 @@ type Order struct {
 	TaskId           string               `json:"task_id" gorm:"type:varchar(64)"`
 	ProcessType      string               `json:"process_type"`
 	Remark           string               `json:"remark" grom:"type:varchar(32)"`
+
+	TokenInChainNames []string `json:"-" gorm:"-"`
 }
 
 type Tasks struct {

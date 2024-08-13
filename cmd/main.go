@@ -1,15 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"omni-balance/internal/actions"
 	"omni-balance/internal/daemons"
 	_ "omni-balance/internal/daemons/bot"
 	_ "omni-balance/internal/daemons/cross_chain"
@@ -28,7 +22,7 @@ import (
 	_ "omni-balance/utils/provider/bridge/routernitro"
 	_ "omni-balance/utils/provider/cex/gate"
 	_ "omni-balance/utils/provider/dex/uniswap"
-	_ "omni-balance/utils/wallets/safe"
+	_ "omni-balance/utils/wallets/multisig"
 	"os"
 	"os/signal"
 	"syscall"
@@ -125,134 +119,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "omni-balance"
 	app.Action = Action
-	app.Commands = []*cli.Command{
-		{
-			Name:        "gate_liquidity",
-			Usage:       "Create an order for the liquidity of Gate.",
-			Description: "Create an order for the liquidity of Gate.",
-			Action:      actions.DoGateLiquidity,
-			Flags: []cli.Flag{
-				&cli.StringFlag{
-					Name:  "server",
-					Usage: "omni-balance server port",
-					Value: "http://127.0.0.1:8080",
-				},
-				&cli.StringFlag{
-					Name:     "apiKey",
-					Required: true,
-					Usage:    "omni-balance API key in config",
-				},
-				&cli.StringFlag{
-					Name:     "tokenName",
-					Required: true,
-					Usage:    "a token name must be in config",
-				},
-				&cli.StringFlag{
-					Name:     "fromChain",
-					Required: true,
-					Usage:    "deposit to the Gate exchange from that chain.",
-				},
-				&cli.StringFlag{
-					Name:     "toChain",
-					Required: true,
-					Usage:    "Withdraw to that chain from the Gate exchange.",
-				},
-				&cli.StringFlag{
-					Name:     "amount",
-					Required: true,
-					Usage:    "The number of tokens that need to be rebalanced.",
-				},
-				&cli.StringFlag{
-					Name:     "address",
-					Required: true,
-					Usage:    "Use that address to rebalance, and note that this address must exist in the configuration file.",
-				},
-			},
-		},
-		{
-			Name:  "del_order",
-			Usage: "delete order by id",
-			Flags: []cli.Flag{
-				&cli.IntFlag{
-					Name:  "id",
-					Usage: "order id",
-				},
-				&cli.StringFlag{
-					Name:  "server",
-					Usage: "server host, example: http://127.0.0.1:8080",
-					Value: "http://127.0.0.1:8080",
-				},
-			},
-			Action: func(c *cli.Context) error {
-				u, err := url.Parse(c.String("server"))
-				if err != nil {
-					return errors.Wrap(err, "parse server url")
-				}
-				u.RawPath = "/remove_order"
-				u.Path = u.RawPath
-				var body = bytes.NewBuffer(nil)
-				err = json.NewEncoder(body).Encode(map[string]interface{}{
-					"id": c.Int("id"),
-				})
-				if err != nil {
-					return errors.Wrap(err, "encode body")
-				}
-				resp, err := http.Post(u.String(), "application/json", body)
-				if err != nil {
-					return errors.Wrap(err, "post")
-				}
-				defer resp.Body.Close()
-				data, _ := io.ReadAll(resp.Body)
-				if resp.StatusCode != http.StatusOK {
-					return errors.Errorf("http status code: %d, body is: %s", resp.StatusCode, data)
-				}
-				logrus.Infof("delete order #%d success", c.Int64("id"))
-				return nil
-			},
-		},
-		{
-			Name:    "version",
-			Usage:   "show version",
-			Aliases: []string{"v"},
-			Action: func(c *cli.Context) error {
-				fmt.Printf("Version: %s\n", version)
-				fmt.Printf("Commit: %s\n", commitMessage)
-				fmt.Printf("Build time: %s\n", commitTime)
-				return nil
-			},
-		},
-		{
-			Name:   "list",
-			Usage:  "list supported providers and docs",
-			Action: Usage,
-		},
-		{
-			Name:  "tasks",
-			Usage: "list supported tasks",
-			Action: func(_ *cli.Context) error {
-				fmt.Println(daemons.Help())
-				return nil
-			},
-		},
-		{
-			Name:  "example",
-			Usage: "create a example config file",
-			Flags: []cli.Flag{
-				&cli.StringFlag{
-					Name:    "output",
-					Usage:   "output file path",
-					Value:   "./config.yaml.example",
-					Aliases: []string{"o"},
-				},
-			},
-			Action: func(c *cli.Context) error {
-				if err := CreateExampleConfig(c.String("output")); err != nil {
-					return errors.Wrap(err, "create example config")
-				}
-				return nil
-			},
-		},
-	}
+	app.Commands = Commands
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
 			Name:    "conf",

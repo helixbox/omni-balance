@@ -3,9 +3,6 @@ package market
 import (
 	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"omni-balance/internal/daemons"
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
@@ -18,6 +15,10 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -211,15 +212,16 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 	if err != nil {
 		return errors.Wrap(err, "check balance error")
 	}
-
-	for _, v := range conf.GetWalletConfig(order.Wallet).Tokens {
+	walletConfig := conf.GetWalletConfig(order.Wallet)
+	for _, v := range walletConfig.Tokens {
 		if !utils.InArray(order.TargetChainName, v.Chains) {
 			continue
 		}
 		if order.TokenOutName != v.Name {
 			continue
 		}
-		if !balance.GreaterThan(balance) {
+		threshold := conf.GetTokenThreshold(order.Wallet, v.Name, order.TargetChainName)
+		if !balance.GreaterThan(threshold) {
 			break
 		}
 		log.Infof("%s balance on %s is enough, skip", v.Name, order.TargetChainName)
@@ -229,6 +231,10 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 		return nil
 	}
 
+	order, err = generateOrderByWalletMode(ctx, order, conf)
+	if err != nil {
+		return errors.Wrap(err, "generate order by wallet mode error")
+	}
 	providerObj, err := getBestProvider(ctx, order, conf)
 	if err != nil {
 		return errors.Wrap(err, "get  provider error")
@@ -240,6 +246,7 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 
 	log.Infof("start  #%d %s on %s use %s provider", order.ID, order.TokenOutName,
 		order.TargetChainName, providerObj.Name())
+	args.SourceChainNames = order.TokenInChainNames
 	result, providerErr := providerObj.Swap(ctx, args)
 	if errors.Is(providerErr, context.Canceled) {
 		return nil
@@ -267,4 +274,37 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 		}
 	}
 	return nil
+}
+
+// 优化orderby wallet mode
+func generateOrderByWalletMode(ctx context.Context, order models.Order, conf configs.Config) (models.Order, error) {
+	if order.TokenInName != "" {
+		return order, nil
+	}
+	if conf.GetWalletConfig(order.Wallet).Mode != "balance" {
+		return order, nil
+	}
+	token := conf.GetWalletTokenInfo(order.Wallet, order.TokenOutName)
+	threshold := conf.GetTokenThreshold(order.Wallet, token.Name, order.TargetChainName)
+	var sourceChains []string
+	for _, v := range token.Chains {
+		client, err := chains.NewTryClient(ctx, conf.GetChainConfig(v).RpcEndpoints)
+		if err != nil {
+			return order, errors.Wrap(err, "new evm client error")
+		}
+		tokenInfo := conf.GetTokenInfoOnChain(token.Name, v)
+		balance, err := chains.GetTokenBalance(ctx, client, tokenInfo.ContractAddress, order.Wallet, tokenInfo.Decimals)
+		if err != nil {
+			return order, errors.Wrap(err, "get token balance error")
+		}
+		if balance.Sub(order.Amount).LessThan(threshold) {
+			continue
+		}
+		sourceChains = append(sourceChains, v)
+	}
+	if len(sourceChains) != 0 {
+		order.TokenInName = token.Name
+		order.TokenInChainNames = sourceChains
+	}
+	return order, nil
 }

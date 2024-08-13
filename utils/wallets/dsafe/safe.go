@@ -1,4 +1,4 @@
-package safe
+package dsafe
 
 import (
 	"context"
@@ -22,24 +22,24 @@ import (
 	"github.com/spf13/cast"
 )
 
-type Safe struct {
+type Dsafe struct {
 	conf         wallets.WalletConfig
-	operatorSafe *Safe
+	operatorSafe *Dsafe
 }
 
-func NewSafe(conf wallets.WalletConfig) *Safe {
+func NewDsafe(conf wallets.WalletConfig) *Dsafe {
 	if conf.Operator.Address.Cmp(constant.ZeroAddress) == 0 {
 		panic("operator address is empty")
 	}
 	if conf.Operator.Address.Cmp(conf.Address) == 0 {
 		panic("operator address is same as safe address")
 	}
-	s := &Safe{
+	s := &Dsafe{
 		conf: conf,
 	}
 	if conf.Operator.MultiSignType != "" {
 		operator := conf.Operator
-		s.operatorSafe = &Safe{
+		s.operatorSafe = &Dsafe{
 			conf: wallets.WalletConfig{
 				PrivateKey: operator.PrivateKey,
 				Address:    operator.Address,
@@ -54,16 +54,20 @@ func NewSafe(conf wallets.WalletConfig) *Safe {
 	return s
 }
 
-func (*Safe) IsSupportEip712() bool {
+func (*Dsafe) IsSupportEip712() bool {
 	return false
 }
 
-func (s *Safe) CheckFullAccess(ctx context.Context) error {
+func (s *Dsafe) CheckFullAccess(ctx context.Context) error {
 	info, err := s.safeWalletInfo(ctx)
 	if err != nil {
 		return err
 	}
-	if !utils.InArrayFold(s.conf.Operator.Address.Hex(), info.Owners) {
+	var owners []string
+	for _, v := range info.Owners {
+		owners = append(owners, v.Value)
+	}
+	if !utils.InArrayFold(s.conf.Operator.Address.Hex(), owners) {
 		return errors.New("operator is not in owners")
 	}
 	return nil
@@ -79,7 +83,7 @@ func (s *Safe) CheckFullAccess(ctx context.Context) error {
 // Returns:
 //
 //	common.Address - The address from the configuration.
-func (s *Safe) GetAddress(isReal ...bool) common.Address {
+func (s *Dsafe) GetAddress(isReal ...bool) common.Address {
 	if len(isReal) > 0 && isReal[0] {
 		if s.conf.Operator.MultiSignType == "" {
 			return s.conf.Address
@@ -89,25 +93,25 @@ func (s *Safe) GetAddress(isReal ...bool) common.Address {
 	return s.conf.Address
 }
 
-func (s *Safe) IsDifferentAddress() bool {
+func (s *Dsafe) IsDifferentAddress() bool {
 	return true
 }
 
-func (s *Safe) SignRawMessage(_ []byte) (sig []byte, err error) {
+func (s *Dsafe) SignRawMessage(_ []byte) (sig []byte, err error) {
 	return nil, error_types.ErrUnsupportedWalletType
 }
 
-func (s *Safe) GetExternalBalance(ctx context.Context, tokenAddress common.Address, decimals int32,
+func (s *Dsafe) GetExternalBalance(ctx context.Context, tokenAddress common.Address, decimals int32,
 	client simulated.Client) (decimal.Decimal, error) {
 	return s.GetBalance(ctx, tokenAddress, decimals, client)
 }
 
-func (s *Safe) GetBalance(ctx context.Context, tokenAddress common.Address, decimals int32,
+func (s *Dsafe) GetBalance(ctx context.Context, tokenAddress common.Address, decimals int32,
 	client simulated.Client) (decimal.Decimal, error) {
 	return chains.GetTokenBalance(ctx, client, tokenAddress.Hex(), s.GetAddress().Hex(), decimals)
 }
 
-func (s *Safe) GetNonce(ctx context.Context, client simulated.Client) (uint64, error) {
+func (s *Dsafe) GetNonce(ctx context.Context, client simulated.Client) (uint64, error) {
 	log := utils.GetLogFromCtx(ctx)
 	if s.operatorSafe != nil {
 		nonce, err := s.operatorSafe.nonce(ctx)
@@ -117,11 +121,11 @@ func (s *Safe) GetNonce(ctx context.Context, client simulated.Client) (uint64, e
 	return client.NonceAt(ctx, s.GetAddress(), nil)
 }
 
-func (s *Safe) SendTransaction(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
+func (s *Dsafe) SendTransaction(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
 	return s.MultisigTransaction(ctx, tx, client)
 }
 
-func (s *Safe) WaitTransaction(ctx context.Context, txHash common.Hash, _ simulated.Client) error {
+func (s *Dsafe) WaitTransaction(ctx context.Context, txHash common.Hash, _ simulated.Client) error {
 	var (
 		log   = utils.GetLogFromCtx(ctx).WithFields(utils.ToMap(s))
 		t     = time.NewTicker(time.Second * 10)
@@ -141,28 +145,29 @@ func (s *Safe) WaitTransaction(ctx context.Context, txHash common.Hash, _ simula
 				log.Debugf("wait transaction %s error: %s", txHash, err)
 				continue
 			}
-			if len(tx.Confirmations) < tx.ConfirmationsRequired {
+			// tx.DetailedExecutionInfo
+			if len(tx.DetailedExecutionInfo.Confirmations) < tx.DetailedExecutionInfo.ConfirmationsRequired {
 				count = 0
 				log.Infof("%s transaction %s confirmations: %d, required: %d,",
-					tx.Safe, txHash, len(tx.Confirmations), tx.ConfirmationsRequired)
+					tx.SafeAddress, txHash, len(tx.DetailedExecutionInfo.Confirmations), tx.DetailedExecutionInfo.ConfirmationsRequired)
 				if err := notice.Send(ctx,
 					fmt.Sprintf("wait %s safeHash %s confirmations and execute.",
 						constant.GetChainName(s.GetChainIdByCtx(ctx)), txHash),
-					fmt.Sprintf("Please go to %s %s safe address to confirm  and execute #%d transaction.",
-						constant.GetChainName(s.GetChainIdByCtx(ctx)), tx.Safe, tx.Nonce),
+					fmt.Sprintf("Please go to https://dsafe.dcdao.box/transactions/queue?safe=darwinia:%s safe address to confirm  and execute #%d transaction.",
+						tx.SafeAddress, tx.DetailedExecutionInfo.Nonce),
 					logrus.WarnLevel,
 				); err != nil {
 					log.Debugf("send notice error: %s", err)
 				}
 				continue
 			}
-			if !tx.IsExecuted {
+			if tx.ExecutedAt == nil || *tx.ExecutedAt <= 0 {
 				count = 0
 				log.Debugf("transaction %s is not executed", txHash)
 				continue
 			}
-			if !tx.IsSuccessful {
-				log.Debugf("transaction %s is not successful", txHash)
+			if !strings.EqualFold(tx.TxStatus, "SUCCESS") {
+				log.Debugf("transaction %s status is %s", txHash, tx.TxStatus)
 				count++
 				continue
 			}
@@ -173,7 +178,7 @@ func (s *Safe) WaitTransaction(ctx context.Context, txHash common.Hash, _ simula
 	return errors.Errorf("wait transaction %s timeout", txHash)
 }
 
-func (s *Safe) MarshalJSON() ([]byte, error) {
+func (s *Dsafe) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]interface{}{
 		"address": s.conf.Address.Hex(),
 		"operator": map[string]interface{}{
@@ -185,24 +190,24 @@ func (s *Safe) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (s *Safe) GetRealHash(ctx context.Context, txHash common.Hash, client simulated.Client) (common.Hash, error) {
+func (s *Dsafe) GetRealHash(ctx context.Context, txHash common.Hash, client simulated.Client) (common.Hash, error) {
 	tx, err := s.GetMultiSigTransaction(ctx, txHash)
 	if err != nil {
 		return [32]byte{}, err
 	}
-	if len(tx.Confirmations) != tx.ConfirmationsRequired {
+	if len(tx.DetailedExecutionInfo.Confirmations) != tx.DetailedExecutionInfo.ConfirmationsRequired {
 		return [32]byte{}, errors.New("transaction not confirmed")
 	}
-	if tx.TransactionHash == nil {
+	if tx.TxHash == "" {
 		return [32]byte{}, errors.New("transaction hash is empty")
 	}
-	txHashStr := cast.ToString(tx.TransactionHash)
+	txHashStr := cast.ToString(tx.TxHash)
 	if txHashStr == "" {
-		return [32]byte{}, errors.Errorf("transaction hash convert to hash error, the result is %+v", tx.TransactionHash)
+		return [32]byte{}, errors.Errorf("transaction hash convert to hash error, the result is %+v", tx.TxHash)
 	}
 	return common.HexToHash(txHashStr), nil
 }
 
-func (s *Safe) Name(_ context.Context) string {
-	return "safe"
+func (s *Dsafe) Name(_ context.Context) string {
+	return "dsafe"
 }

@@ -1,12 +1,21 @@
 package daemons
 
 import (
+	"context"
+	"fmt"
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
+	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
+	"omni-balance/utils/constant"
 	"omni-balance/utils/provider"
 	"omni-balance/utils/wallets"
+	"strings"
+	"sync"
 
+	"github.com/ilyakaznacheev/cleanenv"
+	"github.com/schollz/progressbar/v3"
+	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 )
 
@@ -16,18 +25,19 @@ func CreateSwapParams(order models.Order, orderProcess models.OrderProcess, log 
 		sourceChain = order.SourceChainName
 	}
 	return provider.SwapParams{
-		OrderId:     order.ID,
-		SourceChain: sourceChain,
-		Sender:      wallet,
-		Receiver:    order.Wallet,
-		TargetChain: order.TargetChainName,
-		SourceToken: order.TokenInName,
-		TargetToken: order.TokenOutName,
-		Amount:      order.Amount,
-		LastHistory: createLastHistory(orderProcess),
-		RecordFn:    createRecordFunction(order, log),
-		Order:       order.Order,
-		Remark:      order.Remark,
+		OrderId:          order.ID,
+		SourceChain:      sourceChain,
+		SourceChainNames: order.TokenInChainNames,
+		Sender:           wallet,
+		Receiver:         order.Wallet,
+		TargetChain:      order.TargetChainName,
+		SourceToken:      order.TokenInName,
+		TargetToken:      order.TokenOutName,
+		Amount:           order.Amount,
+		LastHistory:      createLastHistory(orderProcess),
+		RecordFn:         createRecordFunction(order, log),
+		Order:            order.Order,
+		Remark:           order.Remark,
 	}
 }
 
@@ -77,4 +87,137 @@ func createOrderProcess(order models.Order, s provider.SwapHistory) *models.Orde
 		CurrentChainName: s.CurrentChain,
 		Tx:               s.Tx,
 	}
+}
+
+func FindAllChainBalance(_ context.Context, confPath string, needPrintProgress bool) (map[string]map[string]map[string]decimal.Decimal, error) {
+	conf := new(configs.Config)
+	if err := cleanenv.ReadConfig(confPath, conf); err != nil {
+		return nil, err
+	}
+	conf = conf.Init()
+	tokens := make(map[string]struct{})
+	type task struct {
+		tokenName     string
+		chainName     string
+		walletAddress string
+	}
+
+	type value struct {
+		balance decimal.Decimal
+		remarks string
+	}
+
+	var (
+		chainNames         []string
+		chainQueueMap      = make(map[string]chan task)
+		tokenBalanceResult sync.Map
+		w                  sync.WaitGroup
+		bar                *progressbar.ProgressBar
+	)
+
+	getKey := func(chainName, tokenname, walletAddress string) string {
+		return fmt.Sprintf("%s:%s:%s", chainName, tokenname, walletAddress)
+	}
+	parseKey := func(key string) (chainName string, tokenname string, walletAddress string) {
+		split := strings.Split(key, ":")
+		return split[0], split[1], split[2]
+	}
+
+	for _, v := range conf.Chains {
+		w.Add(1)
+		for _, token := range v.Tokens {
+			tokens[token.Name] = struct{}{}
+		}
+		chainNames = append(chainNames, v.Name)
+		chainQueueMap[v.Name] = make(chan task, 5)
+
+		go func(chainName string, queue chan task) {
+			defer w.Done()
+			chain := conf.GetChainConfig(chainName)
+			client, err := chains.NewTryClient(context.Background(), chain.RpcEndpoints)
+			if err != nil {
+				panic(err)
+			}
+			for v := range queue {
+				token := conf.GetTokenInfoOnChainNil(v.tokenName, chainName)
+				key := getKey(chainName, v.tokenName, v.walletAddress)
+				if token.Name == "" {
+					tokenBalanceResult.Store(key, value{balance: decimal.RequireFromString("-1"), remarks: "not found"})
+					continue
+				}
+				var errorCount int64
+				for {
+					balance, err := chains.GetTokenBalance(context.Background(), client, token.ContractAddress, v.walletAddress, token.Decimals)
+					if err != nil {
+						errorCount++
+						if errorCount > 3 {
+							logrus.Fatalf("get %s balance on %s error: %s", v.tokenName, chainName, err)
+							return
+						}
+						logrus.Errorf("get %s balance on %s error: %s", v.tokenName, chainName, err)
+						continue
+					}
+					errorCount = 0
+					tokenBalanceResult.Store(key, value{balance: balance})
+					if bar != nil {
+						_ = bar.Add(1)
+					}
+					break
+				}
+			}
+		}(v.Name, chainQueueMap[v.Name])
+	}
+
+	var tasks []task
+	for _, chainName := range chainNames {
+		for tokenName := range tokens {
+			for _, v := range conf.Wallets {
+				tasks = append(tasks, task{
+					tokenName:     tokenName,
+					chainName:     chainName,
+					walletAddress: v.Address,
+				})
+				if v.Operator.Address.Cmp(constant.ZeroAddress) != 0 {
+					tasks = append(tasks, task{
+						tokenName:     tokenName,
+						chainName:     chainName,
+						walletAddress: v.Operator.Address.Hex(),
+					})
+				}
+
+				if v.Operator.Operator.Cmp(constant.ZeroAddress) != 0 {
+					tasks = append(tasks, task{
+						tokenName:     tokenName,
+						chainName:     chainName,
+						walletAddress: v.Operator.Operator.Hex(),
+					})
+				}
+			}
+		}
+	}
+	if needPrintProgress {
+		bar = progressbar.New(len(tasks))
+	}
+	for _, v := range tasks {
+		chainQueueMap[v.chainName] <- v
+	}
+	for k := range chainQueueMap {
+		close(chainQueueMap[k])
+	}
+	w.Wait()
+
+	var result = make(map[string]map[string]map[string]decimal.Decimal)
+
+	tokenBalanceResult.Range(func(key, v any) bool {
+		chainName, tokenName, walletAddress := parseKey(key.(string))
+		if result[chainName] == nil {
+			result[chainName] = make(map[string]map[string]decimal.Decimal)
+		}
+		if result[chainName][tokenName] == nil {
+			result[chainName][tokenName] = make(map[string]decimal.Decimal)
+		}
+		result[chainName][tokenName][walletAddress] = v.(value).balance
+		return true
+	})
+	return result, nil
 }

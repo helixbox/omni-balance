@@ -13,6 +13,7 @@ import (
 	"omni-balance/utils/safe_api/client/safes"
 	"omni-balance/utils/safe_api/client/transactions"
 	"omni-balance/utils/wallets/safe/safe_abi"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +46,7 @@ var (
 		constant.PolygonZkEvm: "safe-transaction-zkevm.safe.global",
 		constant.Zksync:       "safe-transaction-zkevm.safe.global",
 		constant.Sepolia:      "safe-transaction-sepolia.safe.global",
+		constant.Scroll:       "safe-transaction-scroll.safe.global",
 	}
 	safeGlobalLocker sync.Mutex
 )
@@ -116,6 +118,7 @@ func (s *Safe) GetDomainByCtx(ctx context.Context) string {
 func (s *Safe) GetChainIdByCtx(ctx context.Context) int {
 	chainId := constant.GetChainId(cast.ToString(ctx.Value(constant.ChainNameKeyInCtx)))
 	if chainId == 0 {
+		debug.PrintStack()
 		logrus.Fatalf("chain name not found in context")
 	}
 	return chainId
@@ -169,7 +172,7 @@ func (s *Safe) MultisigTransaction(ctx context.Context, tx *types.LegacyTx, clie
 		Value: tx.Value,
 		Data:  tx.Data,
 	})
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "insufficient funds for gas * price + value") {
 		log.Debugf("estimate gas error: %s", err.Error())
 		return common.Hash{}, errors.Wrap(err, "estimate gas error")
 	}
@@ -436,7 +439,7 @@ func (s *Safe) eip712(ctx context.Context, t Transaction) apitypes.TypedData {
 		},
 		Message: apitypes.TypedDataMessage{
 			"to":             t.To.Hex(),
-			"value":          math.NewHexOrDecimal256(t.Value.IntPart()),
+			"value":          t.Value.BigInt(),
 			"data":           common.Hex2Bytes(t.Data),
 			"operation":      math.NewHexOrDecimal256(int64(t.Operation)),
 			"baseGas":        math.NewHexOrDecimal256(t.BaseGas.IntPart()),

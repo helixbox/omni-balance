@@ -2,9 +2,6 @@ package li
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
 	"net/url"
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
@@ -14,6 +11,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 )
 
 // Quote see https://apidocs.li.fi/reference/get_quote
@@ -119,8 +120,14 @@ func (l Li) GetBestQuote(ctx context.Context, args provider.SwapParams) (tokenIn
 	}
 
 	for _, sourceToken := range l.conf.SourceTokens {
+		if args.SourceToken != "" && sourceToken.Name != args.SourceToken {
+			continue
+		}
 		for _, v := range sourceToken.Chains {
 			if strings.EqualFold(v, args.TargetChain) && sourceToken.Name == args.TargetToken {
+				continue
+			}
+			if len(args.SourceChainNames) > 0 && !utils.InArrayFold(v, args.SourceChainNames) {
 				continue
 			}
 			if err := getQuote(v, sourceToken.Name); err != nil {

@@ -1,9 +1,10 @@
 package provider
 
 import (
-	"github.com/pkg/errors"
 	"omni-balance/utils/configs"
 	"sync"
+
+	"github.com/pkg/errors"
 )
 
 type InitFunc func(conf configs.Config, noInit ...bool) (Provider, error)
@@ -68,7 +69,7 @@ func GetProvider(providerType configs.ProviderType, name string) (InitFunc, erro
 	return nil, errors.New("provider not found")
 }
 
-func InitializeBridge(providerInitFunc InitFunc, conf configs.Config, noInit ...bool) (Provider, error) {
+func Init(providerInitFunc InitFunc, conf configs.Config, noInit ...bool) (Provider, error) {
 	bridge, err := providerInitFunc(conf, noInit...)
 	if err != nil {
 		return nil, errors.Wrap(err, "init bridge error")

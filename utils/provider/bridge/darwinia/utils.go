@@ -36,7 +36,7 @@ import (
 //   - wallet: The wallet address.
 //   - amount: The amount of the token to be transferred.
 func (b *Bridge) FindValidSourceChains(ctx context.Context, targetChainId int, TokenName, wallet string,
-	amount decimal.Decimal) (sourceChainIds []int64) {
+	amount decimal.Decimal, sourceChainNames ...string) (sourceChainIds []int64) {
 
 	sourceChains := GetSourceChains(int64(targetChainId), TokenName)
 	if len(sourceChains) == 0 {
@@ -47,6 +47,13 @@ func (b *Bridge) FindValidSourceChains(ctx context.Context, targetChainId int, T
 		m sync.Mutex
 	)
 	for _, sourceChain := range sourceChains {
+		if len(sourceChainNames) > 0 && !utils.InArrayFold(constant.GetChainName(sourceChain), sourceChainNames) {
+			continue
+		}
+		chainName := constant.GetChainName(sourceChain)
+		if !utils.InArrayFold(TokenName, b.config.GetSourceTokenNamesByChainNil(chainName)) {
+			continue
+		}
 		w.Add(1)
 		go b.checkAndAppendSourceChainIfBalanceSufficient(ctx, sourceChain, TokenName, wallet, amount, &sourceChainIds, &w, &m)
 	}
@@ -55,9 +62,9 @@ func (b *Bridge) FindValidSourceChains(ctx context.Context, targetChainId int, T
 }
 
 func (b *Bridge) GetValidSourceChain(ctx context.Context, targetChainId int, TokenName, wallet string,
-	amount decimal.Decimal) (sourceChainId int64) {
+	amount decimal.Decimal, sourceChainNames ...string) (sourceChainId int64) {
 
-	sourceChains := b.FindValidSourceChains(ctx, targetChainId, TokenName, wallet, amount)
+	sourceChains := b.FindValidSourceChains(ctx, targetChainId, TokenName, wallet, amount, sourceChainNames...)
 	if len(sourceChains) == 0 {
 		return 0
 	}
@@ -82,15 +89,17 @@ func (b *Bridge) GetBalance(ctx context.Context, args provider.BalanceParams) (d
 func (b *Bridge) checkAndAppendSourceChainIfBalanceSufficient(ctx context.Context, sourceChain int64,
 	TokenName, wallet string, amount decimal.Decimal, sourceChainIds *[]int64, w *sync.WaitGroup, m *sync.Mutex) {
 	defer utils.Recover()
-
 	defer w.Done()
+
 	balance, err := b.GetBalance(ctx,
 		provider.BalanceParams{Token: TokenName, Chain: constant.GetChainName(sourceChain), Wallet: wallet})
 	if err != nil {
 		logrus.Debugf("get %s balance error: %s", constant.GetChainName(sourceChain), err)
 		return
 	}
+
 	if !balance.GreaterThanOrEqual(amount) {
+		logrus.Debugf("check %s balance: %s < %s", constant.GetChainName(sourceChain), balance, amount)
 		return
 	}
 	logrus.Debugf("check %s balance: %s >= %s", constant.GetChainName(sourceChain), balance, amount)

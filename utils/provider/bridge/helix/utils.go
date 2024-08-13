@@ -5,10 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"net/http"
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
@@ -17,6 +13,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
 )
 
 // WaitForBridge waits for the bridge transaction to be confirmed and retrieves the history record
@@ -178,7 +179,7 @@ func (b *Bridge) GetValidChains(ctx context.Context, targetChainName string, sou
 // - sourceChainIds: The list of valid source chain IDs
 // - err: The error, or nil if there is no error
 func (b *Bridge) FindSourceChain(ctx context.Context, targetChainName, TokenName, wallet string,
-	amount decimal.Decimal) (sourceChainIds []int64, err error) {
+	amount decimal.Decimal, sourceChainNames ...string) (sourceChainIds []int64, err error) {
 
 	supportedChains, err := GetTokenSupportedChains(TokenName)
 	if err != nil {
@@ -187,6 +188,9 @@ func (b *Bridge) FindSourceChain(ctx context.Context, targetChainName, TokenName
 	var chains []string
 	for _, v := range supportedChains {
 		if !utils.InArrayFold(targetChainName, v.ToChains) {
+			continue
+		}
+		if len(sourceChainNames) > 0 && !utils.InArrayFold(v.FromChain, sourceChainNames) {
 			continue
 		}
 		chains = append(chains, v.FromChain)
@@ -218,9 +222,9 @@ func (b *Bridge) FindSourceChain(ctx context.Context, targetChainName, TokenName
 // - sourceChainId: The selected source chain ID
 // - err: The error, or nil if there is no error
 func (b *Bridge) GetSourceChain(ctx context.Context, targetChainName, TokenName, wallet string,
-	amount decimal.Decimal) (sourceChainId int64, err error) {
+	amount decimal.Decimal, sourceChainNames ...string) (sourceChainId int64, err error) {
 
-	sourceChainIds, err := b.FindSourceChain(ctx, targetChainName, TokenName, wallet, amount)
+	sourceChainIds, err := b.FindSourceChain(ctx, targetChainName, TokenName, wallet, amount, sourceChainNames...)
 	if err != nil {
 		return 0, err
 	}

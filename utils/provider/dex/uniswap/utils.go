@@ -2,12 +2,6 @@ package uniswap
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/ethclient/simulated"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"math/big"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
@@ -17,6 +11,13 @@ import (
 	uniswapConfigs "omni-balance/utils/provider/dex/uniswap/configs"
 	uniswapUtils "omni-balance/utils/provider/dex/uniswap/utils"
 	"omni-balance/utils/wallets"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
 )
 
 type BuildTxParams struct {

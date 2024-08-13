@@ -2,8 +2,6 @@ package cross_chain
 
 import (
 	"context"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"omni-balance/internal/daemons"
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
@@ -12,6 +10,9 @@ import (
 	"omni-balance/utils/provider"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 func init() {
@@ -105,7 +106,7 @@ func getBridge(ctx context.Context, order *models.Order, conf configs.Config) (p
 		log     = order.GetLogs()
 	)
 	for _, providerInitFunc := range provider.LiquidityProviderTypeAndConf(configs.Bridge, conf) {
-		bridge, err := provider.InitializeBridge(providerInitFunc, conf)
+		bridge, err := provider.Init(providerInitFunc, conf)
 		if err != nil {
 			return nil, errors.Wrap(err, "init bridge error")
 		}

@@ -21,6 +21,11 @@ type Wallets struct {
 	mock.Mock
 }
 
+
+func (s *Wallets) Name(_ context.Context) string {
+	return "safe"
+}
+
 // CheckFullAccess provides a mock function with given fields: ctx
 func (_m *Wallets) CheckFullAccess(ctx context.Context) error {
 	ret := _m.Called(ctx)

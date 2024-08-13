@@ -44,7 +44,6 @@ func Run(ctx context.Context, conf configs.Config) error {
 		for _, token := range wallet.Tokens {
 			for _, chainName := range token.Chains {
 				if ignoreTokens.Contains(token.Name, chainName, wallet.Address) {
-					logrus.Debugf("ignore token %s on chain %s", token.Name, chainName)
 					continue
 				}
 				var botTypes = conf.ListBotNames(wallet.Address, chainName, token.Name)
@@ -54,8 +53,6 @@ func Run(ctx context.Context, conf configs.Config) error {
 				}
 
 				for _, botType := range botTypes {
-					logrus.Debugf("start check %s on %s use %s bot", token.Name, chainName, botType)
-
 					w.Add(1)
 					go func(f func() ([]bot.Task, bot.ProcessType, error), botType string) {
 						defer w.Done()
@@ -97,7 +94,7 @@ func process(ctx context.Context, conf configs.Config, walletAddress, tokenName,
 		panic(fmt.Sprintf("%s botType not found", botType))
 	}
 	return func() ([]bot.Task, bot.ProcessType, error) {
-		return m.Check(ctx, bot.Params{
+		tasks, processType, err := m.Check(ctx, bot.Params{
 			Conf: conf,
 			Info: bot.Config{
 				Wallet:    conf.GetWallet(walletAddress),
@@ -106,5 +103,9 @@ func process(ctx context.Context, conf configs.Config, walletAddress, tokenName,
 			},
 			Client: client,
 		})
+		if err != nil {
+			return nil, bot.Parallel, err
+		}
+		return tasks, processType, nil
 	}
 }

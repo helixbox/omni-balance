@@ -2,11 +2,6 @@ package li
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
@@ -14,6 +9,12 @@ import (
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/provider"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
 )
 
 func init() {
@@ -122,8 +123,6 @@ func (l Li) Swap(ctx context.Context, args provider.SwapParams) (result provider
 		return provider.SwapResult{}, errors.New("token out amount is zero")
 	}
 
-	ctx = context.WithValue(ctx, constant.ChainNameKeyInCtx, sourceChain.Name)
-
 	log := utils.GetLogFromCtx(ctx).WithFields(logrus.Fields{
 		"sourceChain":         sourceChain.Name,
 		"tokenIn":             tokenIn.Name,
@@ -138,6 +137,8 @@ func (l Li) Swap(ctx context.Context, args provider.SwapParams) (result provider
 	if err != nil {
 		return provider.SwapResult{}, err
 	}
+	ctx = context.WithValue(ctx, constant.ChainNameKeyInCtx, sourceChain.Name)
+
 	var (
 		sr = new(provider.SwapResult).
 			SetTokenInName(tokenIn.Name).
@@ -170,7 +171,6 @@ func (l Li) Swap(ctx context.Context, args provider.SwapParams) (result provider
 			TokenOutAmount:  tokenOutAmount,
 			TransactionType: provider.ApproveTransactionAction,
 		})
-
 		err = chains.TokenApprove(ctx,
 			chains.TokenApproveParams{
 				ChainId:         int64(sourceChain.Id),

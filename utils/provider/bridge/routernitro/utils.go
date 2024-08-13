@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
 	"net/url"
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
@@ -16,6 +13,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 )
 
 var (
@@ -169,8 +170,14 @@ func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams)
 	}
 
 	for _, sourceToken := range r.conf.SourceTokens {
+		if args.SourceToken != "" && sourceToken.Name != args.SourceToken {
+			continue
+		}
 		for _, v := range sourceToken.Chains {
 			if strings.EqualFold(v, args.TargetChain) && sourceToken.Name == args.TargetToken {
+				continue
+			}
+			if len(args.SourceChainNames) > 0 && !utils.InArrayFold(v, args.SourceChainNames) {
 				continue
 			}
 			if err := getQuote(v, sourceToken.Name); err != nil {

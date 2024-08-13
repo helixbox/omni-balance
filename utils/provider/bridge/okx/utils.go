@@ -7,10 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"io"
 	"net/url"
 	"omni-balance/utils"
@@ -21,6 +17,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
 )
 
 type QuoteParams struct {
@@ -156,8 +157,14 @@ func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams)
 	}
 
 	for _, sourceToken := range o.conf.SourceTokens {
+		if args.SourceToken != "" && sourceToken.Name != args.SourceToken {
+			continue
+		}
 		for _, v := range sourceToken.Chains {
 			if strings.EqualFold(v, args.TargetChain) && sourceToken.Name == args.TargetToken {
+				continue
+			}
+			if len(args.SourceChainNames) > 0 && !utils.InArrayFold(v, args.SourceChainNames) {
 				continue
 			}
 			if err := getQuote(v, sourceToken.Name); err != nil {

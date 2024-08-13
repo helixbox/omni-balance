@@ -2,7 +2,6 @@ package helix_liquidity_claim
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/provider/bridge/darwinia"
@@ -40,7 +39,6 @@ func (l LayerzeroMessager) Params(ctx context.Context, args MessagerArgs) (param
 	if err != nil {
 		return MessagerParams{}, errors.Wrap(err, "new layerzero messager caller")
 	}
-	fmt.Println(args.ContractAddress.String(), args.ToChainId)
 	fee, err := c.Fee(&bind.CallOpts{}, big.NewInt(int64(args.ToChainId)), args.Payload)
 	if err != nil {
 		return MessagerParams{}, errors.Wrap(err, "get fee")
