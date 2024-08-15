@@ -40,58 +40,64 @@ func SetLevel(l Level) {
 	}
 }
 
-func output(level Level, msg string, args ...interface{}) {
+func outputf(level Level, msg string, args ...interface{}) {
 	if level >= currentLevel {
-		logger.Output(3, fmt.Sprintf("[%s] %s", level.String(), fmt.Sprintf(msg, args...)))
+		_ = logger.Output(3, fmt.Sprintf("[%s] %s", level.String(), fmt.Sprintf(msg, args...)))
+	}
+}
+
+func output(level Level, args ...interface{}) {
+	if level >= currentLevel {
+		_ = logger.Output(3, fmt.Sprintf("[%s] %s", level.String(), fmt.Sprint(args...)))
 	}
 }
 
 func Debugf(msg string, args ...interface{}) {
-	output(LevelDebug, msg, args...)
+	outputf(LevelDebug, msg, args...)
 }
 
 func Debug(args ...interface{}) {
-	output(LevelDebug, "", args...)
+	output(LevelDebug, args...)
 }
 
 // Infof log
 func Infof(msg string, args ...interface{}) {
-	output(LevelInfo, msg, args...)
+	outputf(LevelInfo, msg, args...)
 }
 
 // Info log
 func Info(args ...interface{}) {
-	output(LevelInfo, "", args...)
+	output(LevelInfo, args...)
 }
 
 // Errorf log
 func Errorf(msg string, args ...interface{}) {
-	output(LevelError, msg, args...)
+	outputf(LevelError, msg, args...)
 }
 
 // Error log
 func Error(args ...interface{}) {
-	output(LevelError, "", args...)
+	output(LevelError, args...)
 }
 
 // Warnf log
 func Warnf(msg string, args ...interface{}) {
-	output(LevelWarn, msg, args...)
+	outputf(LevelWarn, msg, args...)
 }
 
 // Warn log
 func Warn(args ...interface{}) {
-	output(LevelWarn, "", args...)
+	output(LevelWarn, args...)
 }
 
 // Fatalf send log fatalf
 func Fatalf(msg string, args ...interface{}) {
-	output(LevelFatal, msg, args...)
+	outputf(LevelFatal, msg, args...)
 	os.Exit(1)
 }
 
 // Fatal send log fatal
 func Fatal(args ...interface{}) {
-	output(LevelFatal, "", args...)
+	output(LevelFatal, args...)
 	os.Exit(1)
 }

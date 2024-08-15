@@ -12,20 +12,20 @@ import (
 
 var (
 	aaveAddressBook = map[string]AvaeConfig{
-		constant.Arbitrum: AvaeConfig{
+		constant.Arbitrum: {
 			Chain:     constant.Arbitrum,
 			L2Pool:    common.HexToAddress("0x794a61358D6845594F94dc1DB02A252b5b4814aD"),
 			Oracle:    common.HexToAddress("0xb56c2F0B653B2e0b10C9b928C8580Ac5Df02C7C7"),
 			Multicall: common.HexToAddress("0xcA11bde05977b3631167028862bE2a173976CA11"),
 			DebtTokens: map[string]debtTokens{
-				"USDT": debtTokens{
+				"USDT": {
 					Name:            "USDT",
 					AToken:          common.HexToAddress("0x6ab707Aca953eDAeFBc4fD23bA73294241490620"),
 					VToken:          common.HexToAddress("0xfb00AC187a8Eb5AFAE4eACE434F493Eb62672df7"),
 					UnderlyingToken: common.HexToAddress("0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9"),
 					Decimals:        6,
 				},
-				"WETH": debtTokens{
+				"WETH": {
 					Name:            "WETH",
 					AToken:          common.HexToAddress("0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8"),
 					VToken:          common.HexToAddress("0x0c84331e39d6658Cd6e6b9ba04736cC4c4734351"),
@@ -34,20 +34,20 @@ var (
 				},
 			},
 		},
-		constant.Optimism: AvaeConfig{
+		constant.Optimism: {
 			Chain:     constant.Optimism,
 			L2Pool:    common.HexToAddress("0x794a61358D6845594F94dc1DB02A252b5b4814aD"),
 			Oracle:    common.HexToAddress("0xD81eb3728a631871a7eBBaD631b5f424909f0c77"),
 			Multicall: common.HexToAddress("0xcA11bde05977b3631167028862bE2a173976CA11"),
 			DebtTokens: map[string]debtTokens{
-				"USDT": debtTokens{
+				"USDT": {
 					Name:            "USDT",
 					AToken:          common.HexToAddress("0x6ab707Aca953eDAeFBc4fD23bA73294241490620"),
 					VToken:          common.HexToAddress("0xfb00AC187a8Eb5AFAE4eACE434F493Eb62672df7"),
 					UnderlyingToken: common.HexToAddress("0x94b008aA00579c1307B0EF2c499aD98a8ce58e58"),
 					Decimals:        6,
 				},
-				"WETH": debtTokens{
+				"WETH": {
 					Name:            "WETH",
 					AToken:          common.HexToAddress("0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8"),
 					VToken:          common.HexToAddress("0x0c84331e39d6658Cd6e6b9ba04736cC4c4734351"),
@@ -56,10 +56,10 @@ var (
 				},
 			},
 		},
-		constant.ArbitrumSepolia: AvaeConfig{
+		constant.ArbitrumSepolia: {
 			Chain: constant.ArbitrumSepolia,
 			DebtTokens: map[string]debtTokens{
-				"USDC": debtTokens{
+				"USDC": {
 					Name:            "USDC",
 					AToken:          common.HexToAddress("0x460b97BD498E1157530AEb3086301d5225b91216"),
 					VToken:          common.HexToAddress("0x4fBE3A94C60A5085dA6a2D309965DcF34c36711d"),

@@ -109,7 +109,7 @@ func getBridge(ctx context.Context, order *models.Order, conf configs.Config) (p
 		if err != nil {
 			return nil, errors.Wrap(err, "init bridge error")
 		}
-		tokenInCosts, err := bridge.GetCost(context.Background(), provider.SwapParams{
+		tokenInCosts, err := bridge.GetCost(ctx, provider.SwapParams{
 			SourceToken: order.TokenInName,
 			Sender:      conf.GetWallet(order.Wallet),
 			TargetToken: order.TokenOutName,

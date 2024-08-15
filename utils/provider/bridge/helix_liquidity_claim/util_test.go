@@ -16,7 +16,6 @@ import (
 
 func Test_encodeWithdrawLiquidity(t *testing.T) {
 	conf := &configs.Config{
-		Debug: true,
 		Chains: []configs.Chain{
 			{
 				Id:           constant.GetChainId(constant.Arbitrum),
@@ -99,7 +98,6 @@ func Test_ClaimBuildTx(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	conf := &configs.Config{
-		Debug: true,
 		Chains: []configs.Chain{
 			{
 				Id:           constant.GetChainId(constant.Arbitrum),

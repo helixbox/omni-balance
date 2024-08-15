@@ -161,9 +161,7 @@ func TokenApprove(ctx context.Context, args TokenApproveParams) error {
 	if err != nil {
 		return errors.Wrap(err, "erc20 allowance")
 	}
-	log.Debugf("%s token %s on %s erc20 allowance: %s", args.Spender.Hex(), args.TokenAddress.Hex(), args.ChainId, allowanceWei)
 	if decimal.NewFromBigInt(allowanceWei, 0).GreaterThanOrEqual(args.AmountWei) {
-		log.Debugf("%s token %s on %s erc20 allowance %s >= %s, skip approve", args.Spender.Hex(), args.TokenAddress.Hex(), args.ChainId, allowanceWei, args.AmountWei)
 		return nil
 	}
 	erc20Abi, err := erc20.TokenMetaData.GetAbi()
@@ -182,7 +180,6 @@ func TokenApprove(ctx context.Context, args TokenApproveParams) error {
 	if err != nil {
 		return errors.Wrap(err, "erc20 approve")
 	}
-	log.Debugf("%s token %s on %s erc20 approve txHash: %s", args.Spender.Hex(), args.TokenAddress.Hex(), args.ChainId, txHash.Hex())
 	if args.WaitTransaction != nil {
 		return args.WaitTransaction(ctx, txHash, args.Client)
 	}

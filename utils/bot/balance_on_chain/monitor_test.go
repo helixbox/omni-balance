@@ -30,10 +30,10 @@ func TestBalanceOnChain_Check(t *testing.T) {
 			},
 		},
 		Wallets: []configs.Wallet{
-			configs.Wallet{
+			{
 				Address: constant.ZeroAddress.Hex(),
 				Tokens: []configs.WalletToken{
-					configs.WalletToken{
+					{
 						Name:      "ETH",
 						Amount:    decimal.RequireFromString("1"),
 						Threshold: decimal.RequireFromString("1000"),

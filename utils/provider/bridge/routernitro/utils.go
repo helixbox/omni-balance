@@ -103,7 +103,7 @@ func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams)
 
 	var (
 		tokenOut = r.conf.GetTokenInfoOnChain(args.TargetToken, args.TargetChain)
-		msg      = fmt.Sprintf("wallet %s rebalance %s on %s", args.Sender.GetAddress(true), args.Receiver, args.TargetToken, args.TargetChain)
+		msg      = fmt.Sprintf("wallet %s rebalance %s on %s", args.Receiver, args.TargetToken, args.TargetChain)
 	)
 
 	getQuote := func(chainName, token string) error {
