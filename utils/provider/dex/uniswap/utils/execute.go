@@ -3,16 +3,17 @@ package utils
 import (
 	"bytes"
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/signer/core/apitypes"
-	"github.com/pkg/errors"
-	"github.com/uniswapv3-go/uniswapv3-universal-router-decoder-go/command"
 	"math/big"
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/provider/dex/uniswap/abi/v3UniversalRouter"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+	"github.com/pkg/errors"
+	"github.com/uniswapv3-go/uniswapv3-universal-router-decoder-go/command"
 )
 
 type Paths []Path
@@ -263,7 +264,7 @@ func (e *Execute) Error() error {
 	if len(errs) == 0 {
 		return nil
 	}
-	return fmt.Errorf(strings.Join(errs, "\n"))
+	return errors.New(strings.Join(errs, "\n"))
 }
 
 func (e *Execute) Build(deadline *big.Int) ([]byte, error) {

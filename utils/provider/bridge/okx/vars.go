@@ -2,10 +2,11 @@ package okx
 
 import (
 	"encoding/json"
+	"omni-balance/utils/constant"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"omni-balance/utils/constant"
 )
 
 var (
@@ -226,7 +227,7 @@ type Config struct {
 
 func (r OksResp) Error() error {
 	if r.Code != "0" {
-		return errors.Errorf(r.Msg)
+		return errors.New(r.Msg)
 	}
 	return nil
 }
