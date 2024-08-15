@@ -148,8 +148,8 @@ func (s *Safe) WaitTransaction(ctx context.Context, txHash common.Hash, _ simula
 				if err := notice.Send(ctx,
 					fmt.Sprintf("wait %s safeHash %s confirmations and execute.",
 						constant.GetChainName(s.GetChainIdByCtx(ctx)), txHash),
-					fmt.Sprintf("Please go to %s %s safe address to confirm  and execute #%d transaction.",
-						constant.GetChainName(s.GetChainIdByCtx(ctx)), tx.Safe, tx.Nonce),
+					fmt.Sprintf("Please go to %s to confirm and execute #%d transaction.",
+						s.getSafeWebUrl(constant.GetChainName(s.GetChainIdByCtx(ctx)), tx.Safe), tx.Nonce),
 					zapcore.WarnLevel,
 				); err != nil {
 					log.Debugf("send notice error: %s", err)
@@ -205,4 +205,20 @@ func (s *Safe) GetRealHash(ctx context.Context, txHash common.Hash, client simul
 
 func (s *Safe) Name(_ context.Context) string {
 	return "safe"
+}
+
+func (s *Safe) getSafeWebUrl(chainName string, address common.Address) string {
+	safeUrlChainName := map[string]string{
+		constant.Ethereum:  "eth",
+		constant.Optimism:  "oeth",
+		constant.Bnb:       "bnb",
+		constant.Gnosis:    "gno",
+		constant.Polygon:   "matic",
+		constant.Base:      "base",
+		constant.Arbitrum:  "arb1",
+		constant.Avalanche: "avax",
+		constant.Scroll:    "scr",
+	}
+	return fmt.Sprintf("https://app.safe.global/transactions/queue?safe=%s:%s",
+		safeUrlChainName[chainName], address.Hex())
 }

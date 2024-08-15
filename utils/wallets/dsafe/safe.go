@@ -145,7 +145,6 @@ func (s *Dsafe) WaitTransaction(ctx context.Context, txHash common.Hash, _ simul
 				log.Debugf("wait transaction %s error: %s", txHash, err)
 				continue
 			}
-			// tx.DetailedExecutionInfo
 			if len(tx.DetailedExecutionInfo.Confirmations) < tx.DetailedExecutionInfo.ConfirmationsRequired {
 				count = 0
 				log.Infof("%s transaction %s confirmations: %d, required: %d,",
@@ -153,7 +152,7 @@ func (s *Dsafe) WaitTransaction(ctx context.Context, txHash common.Hash, _ simul
 				if err := notice.Send(ctx,
 					fmt.Sprintf("wait %s safeHash %s confirmations and execute.",
 						constant.GetChainName(s.GetChainIdByCtx(ctx)), txHash),
-					fmt.Sprintf("Please go to https://dsafe.dcdao.box/transactions/queue?safe=darwinia:%s safe address to confirm  and execute #%d transaction.",
+					fmt.Sprintf("Please go to https://dsafe.dcdao.box/transactions/queue?safe=darwinia:%s  to confirm  and execute #%d transaction.",
 						tx.SafeAddress, tx.DetailedExecutionInfo.Nonce),
 					zapcore.WarnLevel,
 				); err != nil {

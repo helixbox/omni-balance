@@ -241,7 +241,7 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 		return errors.Wrap(err, "save provider error")
 	}
 
-	log.Infof("start swap %s on %s use %s provider", order.TokenOutName, order.TargetChainName, providerObj.Name())
+	log.Infof("start rebalance %s on %s use %s provider", order.TokenOutName, order.TargetChainName, providerObj.Name())
 	args.SourceChainNames = order.TokenInChainNames
 	result, providerErr := providerObj.Swap(ctx, args)
 	if errors.Is(providerErr, context.Canceled) {
