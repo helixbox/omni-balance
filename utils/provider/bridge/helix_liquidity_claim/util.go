@@ -11,7 +11,6 @@ import (
 	"omni-balance/utils/constant"
 	"omni-balance/utils/provider/bridge/helix"
 	"omni-balance/utils/provider/bridge/helix_liquidity_claim/abi/lnv3Bridge"
-	"omni-balance/utils/wallets"
 	"strings"
 
 	log "omni-balance/utils/logging"
@@ -23,7 +22,7 @@ import (
 )
 
 // BuildTx The client must is item.ToChain
-func (c Claim) BuildTx(ctx context.Context, client simulated.Client, wallet wallets.Wallets, item NeedWithdrawRecords) (*types.LegacyTx, error) {
+func (c Claim) BuildTx(ctx context.Context, client simulated.Client, Address common.Address, item NeedWithdrawRecords) (*types.LegacyTx, error) {
 	fromChannel := messagerAddress[item.FromChain][item.Channel]
 	toChannel := messagerAddress[item.ToChain][item.Channel]
 	if fromChannel.Cmp(constant.ZeroAddress) == 0 ||
@@ -44,7 +43,7 @@ func (c Claim) BuildTx(ctx context.Context, client simulated.Client, wallet wall
 	)
 
 	appPayload, err := c.encodeWithdrawLiquidity(item.TransferIds,
-		big.NewInt(int64(toChainId)), wallet.GetAddress())
+		big.NewInt(int64(toChainId)), Address)
 	if err != nil {
 		return nil, errors.Wrap(err, "encode withdraw liquidity")
 	}
@@ -64,13 +63,13 @@ func (c Claim) BuildTx(ctx context.Context, client simulated.Client, wallet wall
 		ToChainId:       fromChainId,
 		RemoteMessager:  fromChannel,
 		Payload:         payload,
-		Refunder:        wallet.GetAddress(),
+		Refunder:        Address,
 		Client:          client,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "get messager params")
 	}
-	txData, err := c.WithdrawLiquidity(ctx, fromChainId, item.TransferIds, wallet.GetAddress(), params.ExtParams)
+	txData, err := c.WithdrawLiquidity(ctx, fromChainId, item.TransferIds, Address, params.ExtParams)
 	if err != nil {
 		return nil, errors.Wrap(err, "withdraw liquidity")
 	}

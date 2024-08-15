@@ -68,7 +68,7 @@ func (c Claim) Swap(ctx context.Context, args provider.SwapParams) (provider.Swa
 	ctx = context.WithValue(ctx, constant.ChainNameKeyInCtx, args.TargetChain)
 	defer client.Close()
 	if tx == "" {
-		txData, err := c.BuildTx(ctx, client, args.Sender, item)
+		txData, err := c.BuildTx(ctx, client, args.Sender.GetAddress(), item)
 		if err != nil {
 			return result.SetError(err).Out(), err
 		}

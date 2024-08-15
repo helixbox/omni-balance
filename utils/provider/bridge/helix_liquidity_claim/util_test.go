@@ -6,7 +6,7 @@ import (
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/constant"
-	_ "omni-balance/utils/wallets/safe"
+	_ "omni-balance/utils/wallets/multisig"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -167,7 +167,7 @@ func Test_ClaimBuildTx(t *testing.T) {
 		panic(err)
 	}
 	c1 := c.(Claim)
-	tx, err := c1.BuildTx(context.TODO(), client, conf.GetWallet("0x000000000Bb6a011dB294ce3F3423f00EAc4959e"), NeedWithdrawRecords{
+	tx, err := c1.BuildTx(context.TODO(), client, common.HexToAddress("0x000000000Bb6a011dB294ce3F3423f00EAc4959e"), NeedWithdrawRecords{
 		ClaimInfo: ClaimInfo{
 			TransferIds: []string{
 				"0xd84be70f3b8d54cc248da2aae1d73f2536b1e4c02fa53697991e284fd88bb737",
