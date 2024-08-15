@@ -5,9 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"net/http"
 	"omni-balance/utils"
+
+	"go.uber.org/zap/zapcore"
 )
 
 type Slack struct {
@@ -34,18 +35,18 @@ type Field struct {
 	Short bool   `json:"short"`
 }
 
-func Level2SlackColor(level logrus.Level) string {
+func Level2SlackColor(level zapcore.Level) string {
 	switch level {
-	case logrus.ErrorLevel:
+	case zapcore.ErrorLevel:
 		return "danger"
-	case logrus.WarnLevel:
+	case zapcore.WarnLevel:
 		return "warning"
 	default:
 		return "good"
 	}
 }
 
-func (s *Slack) Send(ctx context.Context, title string, content string, level logrus.Level, fields Fields) error {
+func (s *Slack) Send(ctx context.Context, title string, content string, level zapcore.Level, fields Fields) error {
 	b := &body{
 		Channel:     s.Channel,
 		Username:    "omni-balance",

@@ -3,16 +3,17 @@ package provider
 import (
 	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient/simulated"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/constant"
 	"omni-balance/utils/notice"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/labstack/gommon/log"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 )
 
 type TransactionType string
@@ -44,7 +45,6 @@ func Transfer(ctx context.Context, conf configs.Config, args SwapParams, client 
 	args.SourceChain = args.TargetChain
 
 	var (
-		log          = utils.GetLogFromCtx(ctx)
 		last         = args.LastHistory
 		actionNumber = action2Int(args.LastHistory.Actions)
 		token        = conf.GetTokenInfoOnChain(args.TargetToken, args.TargetChain)
@@ -64,9 +64,6 @@ func Transfer(ctx context.Context, conf configs.Config, args SwapParams, client 
 		}
 	)
 
-	log = log.WithFields(logrus.Fields{
-		"last": last,
-	})
 	if !utils.InArray(args.LastHistory.Actions, []string{transferSent, transferReceived}) {
 		actionNumber = 0
 		args.LastHistory.Status = ""
@@ -132,7 +129,6 @@ func Transfer(ctx context.Context, conf configs.Config, args SwapParams, client 
 		err := errors.New("tx is empty")
 		return sr.SetStatus(TxStatusFailed).SetError(err).Out(), err
 	}
-	log.Debugf("waiting for tx %s", txHash)
 	err := args.Sender.WaitTransaction(ctx, common.HexToHash(txHash), client)
 	if err != nil {
 		recordFn(sh.SetStatus(TxStatusFailed).SetActions(transferReceived).Out(), err)
@@ -171,7 +167,7 @@ func GetTokenCrossChainProviders(ctx context.Context, args GetTokenCrossChainPro
 		}
 		ok, err := bridge.CheckToken(ctx, args.TokenName, args.SourceChain, args.TargetChain, args.Amount)
 		if err != nil {
-			logrus.Warnf("check token %s in %s to %s failed: %s", args.TokenName, args.SourceChain, args.TargetChain, err)
+			log.Warnf("check token %s in %s to %s failed: %s", args.TokenName, args.SourceChain, args.TargetChain, err)
 			continue
 		}
 		if !ok {

@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"gorm.io/datatypes"
 )
 
@@ -217,12 +216,6 @@ func (s SwapResult) MarshalOrder() []byte {
 		return nil
 	}
 	return b
-}
-
-func (s SwapParams) GetLogs(name string) *logrus.Entry {
-	return logrus.WithFields(logrus.Fields{
-		"name": name,
-	})
 }
 
 type SwapHistory struct {

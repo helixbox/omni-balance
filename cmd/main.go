@@ -28,8 +28,10 @@ import (
 	"syscall"
 	"time"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
+
 	"github.com/urfave/cli/v2"
 )
 
@@ -51,7 +53,7 @@ func Usage(_ *cli.Context) error {
 		for _, fn := range providerFns {
 			providerObj, err := fn(*config, true)
 			if err != nil {
-				logrus.Panicf("init provider error: %v", err)
+				log.Fatalf("init provider error: %v", err)
 			}
 			fmt.Printf("  %s:\n", providerObj.Name())
 			for _, v := range providerObj.Help() {
@@ -67,25 +69,10 @@ func Action(cli *cli.Context) error {
 	if err := initConfig(ctx, cli.Bool("placeholder"), cli.String("conf"), cli.String("port")); err != nil {
 		return errors.Wrap(err, "init config")
 	}
-	logrus.Infof("version: %s, commit: %s, commitTime: %s", version, commitMessage, commitTime)
-	if config.Debug {
-		logrus.SetReportCaller(true)
-		logrus.SetLevel(logrus.DebugLevel)
-		logrus.SetFormatter(&logrus.TextFormatter{
-			DisableColors:          true,
-			ForceQuote:             true,
-			DisableLevelTruncation: false,
-			QuoteEmptyFields:       true,
-		})
-	}
-
-	if !config.Debug {
-		logrus.SetLevel(logrus.InfoLevel)
-		logrus.SetFormatter(&logrus.JSONFormatter{})
-	}
+	log.Infof("version: %s, commit: %s, commitTime: %s", version, commitMessage, commitTime)
 
 	if err := notice.Init(notice.Type(config.Notice.Type), config.Notice.Config, config.Notice.Interval); err != nil {
-		logrus.Warnf("init notice error: %v", err)
+		log.Warnf("init notice error: %v", err)
 	}
 
 	if err := db.InitDb(*config); err != nil {
@@ -141,6 +128,6 @@ func main() {
 		},
 	}
 	if err := app.Run(os.Args); err != nil {
-		logrus.Error(err)
+		log.Error(err)
 	}
 }

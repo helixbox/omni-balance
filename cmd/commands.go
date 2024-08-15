@@ -11,10 +11,11 @@ import (
 	"omni-balance/internal/actions"
 	"omni-balance/internal/daemons"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -133,7 +134,7 @@ var (
 				if resp.StatusCode != http.StatusOK {
 					return errors.Errorf("http status code: %d, body is: %s", resp.StatusCode, data)
 				}
-				logrus.Infof("delete order #%d success", c.Int64("id"))
+				log.Infof("delete order #%d success", c.Int64("id"))
 				return nil
 			},
 		},

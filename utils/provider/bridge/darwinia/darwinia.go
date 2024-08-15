@@ -11,6 +11,8 @@ import (
 	"omni-balance/utils/wallets"
 	"time"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/pkg/errors"
@@ -157,7 +159,6 @@ func (b *Bridge) GetCost(ctx context.Context, args provider.SwapParams) (provide
 func (b *Bridge) Swap(ctx context.Context, args provider.SwapParams) (result provider.SwapResult, err error) {
 	var (
 		history  = args.LastHistory
-		log      = args.GetLogs("darwinia")
 		recordFn = func(s provider.SwapHistory, errs ...error) {
 			s.ProviderType = string(b.Type())
 			s.ProviderName = b.Name()

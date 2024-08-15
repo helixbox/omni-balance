@@ -9,10 +9,11 @@ import (
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/provider"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
 type Claim struct {
@@ -29,7 +30,6 @@ func (c Claim) CheckToken(ctx context.Context, tokenName, tokenInChainName, toke
 
 func (c Claim) Swap(ctx context.Context, args provider.SwapParams) (provider.SwapResult, error) {
 	var (
-		log    = args.GetLogs("helix-claim")
 		result = &provider.SwapResult{
 			ProviderType: c.Type(),
 			ProviderName: c.Name(),
@@ -72,13 +72,6 @@ func (c Claim) Swap(ctx context.Context, args provider.SwapParams) (provider.Swa
 		if err != nil {
 			return result.SetError(err).Out(), err
 		}
-		log = log.WithFields(logrus.Fields{
-			"txData": logrus.Fields{
-				"value": txData.Value,
-				"data":  common.Bytes2Hex(txData.Data),
-				"to":    txData.To.Hex(),
-			},
-		})
 		txHash, err := args.Sender.SendTransaction(ctx, txData, client)
 		if err != nil {
 			log.Errorf("send tx failed, err: %v", err)

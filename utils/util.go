@@ -9,7 +9,6 @@ import (
 	"io"
 	"math/big"
 	"net/http"
-	"omni-balance/utils/constant"
 	"reflect"
 	"runtime/debug"
 	"strings"
@@ -17,8 +16,9 @@ import (
 	"testing"
 	"time"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/constraints"
 	"golang.org/x/exp/rand"
@@ -147,14 +147,13 @@ func Request(ctx context.Context, method string, url string, body io.Reader, des
 	req = req.WithContext(ctx)
 	var count int
 	for count < 3 {
-		logrus.Debugf("request: %s %s, try %d", req.Method, req.URL, count)
 		count++
 		resp, err := new(http.Client).Do(req)
 		if errors.Is(err, context.Canceled) {
 			return context.Canceled
 		}
 		if err != nil {
-			logrus.Debugf("request failed: %s", err)
+			log.Debugf("request failed: %s", err)
 			time.Sleep(time.Second)
 			continue
 		}
@@ -164,7 +163,7 @@ func Request(ctx context.Context, method string, url string, body io.Reader, des
 		}
 		data, err := io.ReadAll(resp.Body)
 		if err != nil {
-			logrus.Debugf("read response failed: %s", err)
+			log.Debugf("read response failed: %s", err)
 			_ = resp.Body.Close()
 			time.Sleep(time.Second)
 			continue
@@ -197,17 +196,6 @@ func ToMap(v interface{}) map[string]interface{} {
 	return result
 }
 
-func SetLogToCtx(ctx context.Context, log *logrus.Entry) context.Context {
-	return context.WithValue(ctx, constant.LogKeyInCtx, log)
-}
-
-func GetLogFromCtx(ctx context.Context) *logrus.Entry {
-	if v, ok := ctx.Value(constant.LogKeyInCtx).(*logrus.Entry); ok {
-		return v
-	}
-	return logrus.NewEntry(logrus.StandardLogger())
-}
-
 func HexToString(v string) string {
 	i, _ := new(big.Int).SetString(strings.TrimPrefix(v, "0x"), 16)
 	return i.String()
@@ -217,7 +205,7 @@ func Go(f func()) {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				logrus.Errorf("panic: %s", err)
+				log.Errorf("panic: %s", err)
 			}
 		}()
 		f()
@@ -227,7 +215,7 @@ func Go(f func()) {
 func Recover() {
 	if err := recover(); err != nil {
 		debug.PrintStack()
-		logrus.Errorf("panic: %s", err)
+		log.Errorf("panic: %s", err)
 	}
 }
 

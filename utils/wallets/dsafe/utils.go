@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -25,7 +27,6 @@ import (
 	"github.com/go-openapi/strfmt"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
 )
 
@@ -196,20 +197,17 @@ func (s *Dsafe) Client(ctx context.Context) *apiclient.SafeTransactionServiceAPI
 	c := httptransport.New(
 		s.GetDomainByCtx(ctx), apiclient.DefaultBasePath, apiclient.DefaultSchemes)
 	c.Context = ctx
-	c.SetLogger(logrus.New())
 	return apiclient.New(c, strfmt.Default)
 }
 
 func (s *Dsafe) Transfer(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
 	if s.operatorSafe != nil {
-		utils.GetLogFromCtx(ctx).Debugf("transfer use operator safe")
 		return s.operatorSafe.SendTransaction(ctx, tx, client)
 	}
 	return chains.SendTransaction(ctx, client, tx, s.GetAddress(true), s.conf.Operator.PrivateKey)
 }
 
 func (s *Dsafe) MultisigTransaction(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
-	log := utils.GetLogFromCtx(ctx)
 	if tx.Nonce == 0 {
 		nonce, err := s.nonce(ctx)
 		if err != nil {

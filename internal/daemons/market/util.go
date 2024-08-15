@@ -4,7 +4,6 @@ import (
 	"context"
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
-	"omni-balance/utils"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/provider"
@@ -12,11 +11,12 @@ import (
 	"omni-balance/utils/wallets"
 	"sync"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -41,17 +41,16 @@ func createUpdateLog(ctx context.Context, order models.Order, result provider.Sw
 		Error:            result.Error,
 		Status:           result.Status,
 	}
-	log := utils.GetLogFromCtx(ctx).WithFields(logrus.Fields{
-		"order_id": order.ID,
-		"result":   utils.ToMap(result),
-	})
 	if result.Status == provider.TxStatusSuccess &&
 		wallet.IsDifferentAddress() &&
 		result.Receiver != order.Wallet &&
 		result.Receiver != "" {
 		updateOrder.Status = provider.TxStatus(models.OrderStatusWaitTransferFromOperator)
 	}
-	log.Debugf("order status is %v", updateOrder.Status)
+	if result.Error != "" {
+		log.Errorf("#%d wallet %s rebalance %s on %s %s token failed, error info %s", order.ID, wallet.GetAddress(true).Hex(), order.TargetChainName, order.TokenOutName, order.TokenInName, result.Error)
+	}
+
 	return db.DB().Model(&models.Order{}).Where("id = ?", order.ID).Limit(1).Updates(updateOrder).Error
 }
 
@@ -72,9 +71,8 @@ func getWalletTokenBalance(ctx context.Context, wallet wallets.Wallets, tokenNam
 }
 
 func getBestProvider(ctx context.Context, order models.Order, conf configs.Config) (provider.Provider, error) {
-	log := order.GetLogs()
 	if order.ProviderType != "" && order.ProviderName != "" {
-		log.Debugf("provider type is %s, provider name is %s", order.ProviderType, order.ProviderName)
+		log.Debugf("#%d wallet %s rebalance %s on %s %s token use provider %s, provider name is %s", order.ID, order.Wallet, order.TokenOutName, order.TargetChainName, order.TokenInName, order.ProviderType, order.ProviderName)
 		fn, err := provider.GetProvider(order.ProviderType, order.ProviderName)
 		if err != nil {
 			return nil, errors.Wrap(err, "get provider error")
@@ -94,11 +92,7 @@ func getBestProvider(ctx context.Context, order models.Order, conf configs.Confi
 				log.Debugf("init provider error: %s", err.Error())
 				continue
 			}
-			log = log.WithFields(logrus.Fields{
-				"provider_type": p.Type(),
-				"provider_name": p.Name(),
-			})
-			tokenInCosts, ok := providerSupportsOrder(ctx, p, order, conf, log)
+			tokenInCosts, ok := providerSupportsOrder(ctx, p, order, conf)
 			if !ok || len(tokenInCosts) == 0 {
 				continue
 			}
@@ -170,7 +164,7 @@ func getBestProvider(ctx context.Context, order models.Order, conf configs.Confi
 }
 
 func providerSupportsOrder(ctx context.Context, p provider.Provider, order models.Order,
-	conf configs.Config, log *logrus.Entry) (provider.TokenInCosts, bool) {
+	conf configs.Config) (provider.TokenInCosts, bool) {
 	tokenInCosts, err := p.GetCost(ctx, provider.SwapParams{
 		SourceToken:      order.TokenInName,
 		Sender:           conf.GetWallet(order.Wallet),

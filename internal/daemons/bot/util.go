@@ -8,8 +8,9 @@ import (
 	"omni-balance/utils/bot"
 	"omni-balance/utils/provider"
 
+	log "omni-balance/utils/logging"
+
 	uuid "github.com/satori/go.uuid"
-	"github.com/sirupsen/logrus"
 )
 
 func getExistingBuyTokens() ([]*models.Order, error) {
@@ -48,7 +49,7 @@ func createOrder(ctx context.Context, tasks []bot.Task, processType bot.ProcessT
 			v.Wallet, v.TokenOutChainName, v.TokenOutName, provider.TxStatusSuccess, v.Remark)
 		var count int64
 		if d.Model(&models.Order{}).Count(&count); count > 0 {
-			logrus.Debugf("wallet: %s, target_chain_name: %s, token_out_name: %s, status != success, remark: %s order count > 1 skip it",
+			log.Debugf("wallet: %s, target_chain_name: %s, token_out_name: %s, status != success, remark: %s order count > 1 skip it",
 				v.Wallet, v.TokenOutChainName, v.TokenOutName, v.Remark)
 			continue
 		}

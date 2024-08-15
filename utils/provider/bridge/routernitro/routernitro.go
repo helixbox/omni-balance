@@ -2,11 +2,6 @@ package routernitro
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
@@ -14,6 +9,12 @@ import (
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/provider"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/labstack/gommon/log"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 )
 
 func init() {
@@ -99,7 +100,7 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 	}
 
 	if args.SourceChain == "" || args.SourceToken == "" {
-		utils.GetLogFromCtx(ctx).Fatalf("source chain and token is required")
+		log.Fatalf("#%d %s source chain and token is required", args.OrderId, args.TargetToken)
 	}
 
 	tokenIn = r.conf.GetTokenInfoOnChain(args.SourceToken, args.SourceChain)
@@ -119,16 +120,6 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 	}
 
 	ctx = context.WithValue(ctx, constant.ChainNameKeyInCtx, sourceChain.Name)
-
-	log := utils.GetLogFromCtx(ctx).WithFields(logrus.Fields{
-		"sourceChain":         sourceChain.Name,
-		"tokenIn":             tokenIn.Name,
-		"targetChain":         targetChain.Name,
-		"tokenOut":            tokenOut.Name,
-		"tokenInAmount":       tokenInAmount,
-		"wallet":              args.Sender.GetAddress(),
-		"realOperatorAddress": args.Sender.GetAddress(true),
-	})
 
 	client, err := chains.NewTryClient(ctx, sourceChain.RpcEndpoints)
 	if err != nil {
@@ -153,7 +144,7 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 	)
 
 	if !isTokenInNative && actionNumber <= 1 && !isActionSuccess {
-		log.Debug("the source token is not native token, need approve")
+		log.Debugf("#%d %s is not native token, need approve", args.OrderId, tokenIn.Name)
 		args.RecordFn(sh.SetActions(ApproveTransactionAction).SetStatus(provider.TxStatusPending).Out())
 		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
 			OrderId:         args.OrderId,
@@ -183,7 +174,7 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 			args.RecordFn(sh.SetActions(ApproveTransactionAction).SetStatus(provider.TxStatusFailed).Out(), err)
 			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
 		}
-		log.Debugf("approve transaction success")
+		log.Debugf("#%d %s approve transaction success", args.OrderId, tokenIn.Name)
 		args.RecordFn(sh.SetActions(ApproveTransactionAction).SetStatus(provider.TxStatusSuccess).Out())
 	}
 
@@ -202,8 +193,6 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 			TokenOutAmount:  tokenOutAmount,
 			TransactionType: provider.SwapTransactionAction,
 		})
-		log = log.WithField("swap_params", utils.ToMap(args))
-		log.Debug("start build tx")
 
 		buildTx, err := r.BuildTx(ctx, quote, args.Sender.GetAddress(true), common.HexToAddress(args.Receiver))
 		if err != nil {
@@ -225,7 +214,6 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "build tx error")
 		}
 
-		log.WithField("tx_data", utils.ToMap(buildTx)).Debugf("get tx data from routernitro")
 		args.Amount = amount
 		if buildTx.Destination.TokenAmount.Div(tokenOutAmountWei).LessThan(decimal.RequireFromString("0.5")) {
 			err = errors.Errorf("minmum receive is too low, minmum receive: %s, amount: %s",
@@ -246,7 +234,6 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 		}
 		sr.SetOrder(buildTx)
 		args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusPending).Out())
-		log.Debug("sending tx on chain")
 		txHash, err := args.Sender.SendTransaction(ctx, &types.LegacyTx{
 			To:    &buildTx.Txn.To,
 			Value: value.BigInt(),
@@ -256,8 +243,7 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 			args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)
 			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "send tx error")
 		}
-		log = log.WithField("tx", txHash)
-		log.Debug("sending tx on chain success")
+		log.Debugf("#%d %s sending tx on chain success", args.OrderId, tokenIn.Name)
 		sh = sh.SetTx(txHash.Hex())
 		sr = sr.SetTx(txHash.Hex()).SetOrderId(txHash.Hex())
 		args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusSuccess).Out())
@@ -265,7 +251,7 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 	}
 
 	args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusPending).Out())
-	log.Debugf("waiting for tx on chain")
+	log.Debugf("#%d %s waiting for tx on chain", args.OrderId, tokenIn.Name)
 	if err := args.Sender.WaitTransaction(ctx, common.HexToHash(tx), client); err != nil {
 		args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusFailed).Out(), err)
 		return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "wait tx error")
@@ -275,12 +261,12 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 		args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusFailed).Out(), err)
 		return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "get real hash error")
 	}
-	log.Debug("waiting for tx in router nitro")
+	log.Debugf("#%d %s waiting for tx in router nitro", args.OrderId, tokenIn.Name)
 	if err := r.WaitForTx(ctx, realHash); err != nil {
 		args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusFailed).Out(), err)
 		return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "wait router nitro error")
 	}
-	log.Debugf("waiting for tx success in routernitro")
+	log.Debugf("#%d %s waiting for tx success in routernitro", args.OrderId, tokenIn.Name)
 	args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusSuccess).SetCurrentChain(targetChain.Name).Out())
 	return sr.SetStatus(provider.TxStatusSuccess).SetCurrentChain(targetChain.Name).Out(), nil
 }

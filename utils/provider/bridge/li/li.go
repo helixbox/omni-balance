@@ -12,9 +12,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
 func init() {
@@ -104,7 +104,7 @@ func (l Li) Swap(ctx context.Context, args provider.SwapParams) (result provider
 	}
 
 	if args.SourceChain == "" || args.SourceToken == "" {
-		utils.GetLogFromCtx(ctx).Fatalf("source chain and token is required")
+		log.Fatalf("#%d %s source chain and token is required", args.OrderId, args.TargetToken)
 	}
 
 	tokenIn = l.conf.GetTokenInfoOnChain(args.SourceToken, args.SourceChain)
@@ -122,16 +122,6 @@ func (l Li) Swap(ctx context.Context, args provider.SwapParams) (result provider
 	if tokenOutAmount.LessThanOrEqual(decimal.Zero) {
 		return provider.SwapResult{}, errors.New("token out amount is zero")
 	}
-
-	log := utils.GetLogFromCtx(ctx).WithFields(logrus.Fields{
-		"sourceChain":         sourceChain.Name,
-		"tokenIn":             tokenIn.Name,
-		"targetChain":         targetChain.Name,
-		"tokenOut":            tokenOut.Name,
-		"tokenInAmount":       tokenInAmount,
-		"wallet":              args.Sender.GetAddress(),
-		"realOperatorAddress": args.Sender.GetAddress(true),
-	})
 
 	client, err := chains.NewTryClient(ctx, sourceChain.RpcEndpoints)
 	if err != nil {
@@ -158,7 +148,7 @@ func (l Li) Swap(ctx context.Context, args provider.SwapParams) (result provider
 	)
 
 	if !isTokenInNative && actionNumber <= 1 && !isActionSuccess {
-		log.Debug("the source token is not native token, need approve")
+		log.Debugf("#%d %s is not native token, need approve", args.OrderId, tokenIn.Name)
 		args.RecordFn(sh.SetActions(ApproveTransactionAction).SetStatus(provider.TxStatusPending).Out())
 		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
 			OrderId:         args.OrderId,
@@ -187,7 +177,7 @@ func (l Li) Swap(ctx context.Context, args provider.SwapParams) (result provider
 			args.RecordFn(sh.SetActions(ApproveTransactionAction).SetStatus(provider.TxStatusFailed).Out(), err)
 			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
 		}
-		log.Debugf("approve transaction success")
+		log.Debugf("#%d %s approve transaction success", args.OrderId, tokenIn.Name)
 		args.RecordFn(sh.SetActions(ApproveTransactionAction).SetStatus(provider.TxStatusSuccess).Out())
 	}
 
@@ -206,7 +196,6 @@ func (l Li) Swap(ctx context.Context, args provider.SwapParams) (result provider
 			TokenOutAmount:  tokenOutAmount,
 			TransactionType: provider.SwapTransactionAction,
 		})
-		log = log.WithField("swap_params", utils.ToMap(args))
 		txn := quote.TransactionRequest
 		value := decimal.RequireFromString(utils.HexToString(txn.Value))
 		if common.HexToAddress(quote.Action.ToToken.Address).Cmp(common.HexToAddress(tokenOut.ContractAddress)) != 0 {
@@ -220,7 +209,6 @@ func (l Li) Swap(ctx context.Context, args provider.SwapParams) (result provider
 			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "build tx error")
 		}
 
-		log.WithField("tx_data", utils.ToMap(txn)).Debugf("get tx data from li")
 		args.Amount = amount
 		if quote.Estimate.ToAmountMin.Div(tokenOutAmountWei).LessThan(decimal.RequireFromString("0.5")) {
 			err = errors.Errorf("minmum receive is too low, minmum receive: %s, amount: %s",
@@ -241,7 +229,7 @@ func (l Li) Swap(ctx context.Context, args provider.SwapParams) (result provider
 		}
 		sr.SetOrder(quote)
 		args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusPending).Out())
-		log.Debug("sending tx on chain")
+		log.Debugf("#%d sending tx on chain", args.OrderId)
 		txHash, err := args.Sender.SendTransaction(ctx, &types.LegacyTx{
 			To:    &txn.To,
 			Value: value.BigInt(),
@@ -251,8 +239,7 @@ func (l Li) Swap(ctx context.Context, args provider.SwapParams) (result provider
 			args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)
 			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "send tx error")
 		}
-		log = log.WithField("tx", txHash)
-		log.Debug("sending tx on chain success")
+		log.Debugf("#%d sending tx on chain success: %s", args.OrderId, txHash.Hex())
 		sh = sh.SetTx(txHash.Hex())
 		sr = sr.SetTx(txHash.Hex()).SetOrderId(txHash.Hex())
 		args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusSuccess).Out())
@@ -260,7 +247,7 @@ func (l Li) Swap(ctx context.Context, args provider.SwapParams) (result provider
 	}
 
 	args.RecordFn(sh.SetStatus(provider.TxStatusPending).Out())
-	log.Debugf("waiting for tx on chain")
+	log.Debugf("#%d waiting for tx on chain", args.OrderId)
 	if err := args.Sender.WaitTransaction(ctx, common.HexToHash(tx), client); err != nil {
 		args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusFailed).Out(), err)
 		return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrapf(err, "wait tx %s error", tx)
@@ -270,12 +257,12 @@ func (l Li) Swap(ctx context.Context, args provider.SwapParams) (result provider
 		args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusFailed).Out(), err)
 		return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "get real hash error")
 	}
-	log.Debug("waiting for tx in li")
+	log.Debugf("#%d waiting for tx in li: %s", args.OrderId, realHash)
 	if err := l.WaitForTx(ctx, realHash); err != nil {
 		args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusFailed).Out(), err)
 		return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "wait li error")
 	}
-	log.Debugf("waiting for tx success in li")
+	log.Debugf("#%d waiting for tx success in li: %s", args.OrderId, realHash)
 	args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusSuccess).SetCurrentChain(targetChain.Name).Out())
 	return sr.SetStatus(provider.TxStatusSuccess).SetCurrentChain(targetChain.Name).Out(), nil
 }

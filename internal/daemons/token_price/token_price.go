@@ -2,8 +2,6 @@ package token_price
 
 import (
 	"context"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"omni-balance/internal/daemons"
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
@@ -12,6 +10,9 @@ import (
 	"omni-balance/utils/token_price"
 	"sync"
 	"time"
+
+	"github.com/labstack/gommon/log"
+	"github.com/shopspring/decimal"
 )
 
 func init() {
@@ -38,14 +39,14 @@ func Run(ctx context.Context, conf configs.Config) error {
 			defer w.Done()
 			result, err := provider.GetTokenPriceInUSDT(ctx, conf.SourceTokens...)
 			if err != nil {
-				logrus.Warnf("%s get token price error: %s", provider.Name(), err)
+				log.Warnf("%s get token price error: %s", provider.Name(), err)
 				return
 			}
 			m.Lock()
 			defer m.Unlock()
 			for _, r := range result {
 				if r.Price.LessThan(decimal.Zero) {
-					logrus.Warnf("%s get %s token price is less than 0", provider.Name(), r.TokeName)
+					log.Warnf("%s get %s token price is less than 0", provider.Name(), r.TokeName)
 					continue
 				}
 				tokenPrice = append(tokenPrice, models.TokenPrice{

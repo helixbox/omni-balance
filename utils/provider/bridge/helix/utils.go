@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
 // WaitForBridge waits for the bridge transaction to be confirmed and retrieves the history record
@@ -52,11 +52,11 @@ func (b *Bridge) WaitForBridge(ctx context.Context, sender common.Address, tx co
 			}
 			record, err := b.RetrieveHistoryRecords(sender, tx)
 			if err != nil && !errors.Is(err, error_types.ErrNotFound) {
-				logrus.Errorf("wait for bridge timeout, err: %s", err.Error())
+				log.Errorf("wait for bridge timeout, err: %s", err.Error())
 				continue
 			}
 			if record.Result == 0 || record.ResponseTxHash == "" {
-				logrus.Debugf("wait for %s bridge, requests tx is %s,  result: %d", sender.Hex(), tx.Hex(), record.Result)
+				log.Debugf("wait for %s bridge, requests tx is %s,  result: %d", sender.Hex(), tx.Hex(), record.Result)
 				continue
 			}
 			if record.Result == 3 {
@@ -127,14 +127,14 @@ func (b *Bridge) GetValidChains(ctx context.Context, targetChainName string, sou
 			}
 			client, err := chains.NewTryClient(ctx, chain.RpcEndpoints)
 			if err != nil {
-				logrus.Warnf("get %s chain client error: %s", chainName, err)
+				log.Warnf("get %s chain client error: %s", chainName, err)
 				return
 			}
 			defer client.Close()
 
 			balance, err := chains.GetTokenBalance(ctx, client, token.ContractAddress, wallet, token.Decimals)
 			if err != nil {
-				logrus.Warnf("get %s chain %s token balance error: %s", chainName, token.Name, err)
+				log.Warnf("get %s chain %s token balance error: %s", chainName, token.Name, err)
 				return
 			}
 			if !balance.GreaterThanOrEqual(amount) {
@@ -148,7 +148,7 @@ func (b *Bridge) GetValidChains(ctx context.Context, targetChainName string, sou
 				common.HexToAddress(token.ContractAddress),
 			)
 			if err != nil {
-				logrus.Warnf("get %s chain %s token max transfer error: %s", chainName, token.Name, err)
+				log.Warnf("get %s chain %s token max transfer error: %s", chainName, token.Name, err)
 				return
 			}
 			if maxLimit.GreaterThanOrEqual(amount) && !maxLimit.Equal(decimal.Zero) {

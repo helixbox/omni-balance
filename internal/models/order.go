@@ -9,7 +9,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
@@ -153,29 +152,4 @@ func ListNotSuccessTasks(ctx context.Context, db *gorm.DB, isInclude func(order 
 		})
 	}
 	return result, nil
-}
-
-func (o *Order) GetLogs() *logrus.Entry {
-	fields := map[string]interface{}{
-		"orderId":         o.ID,
-		"TargetChainName": o.TargetChainName,
-		"TokenOutName":    o.TokenOutName,
-		"TaskId":          o.TaskId,
-		"Amout":           o.Amount,
-	}
-	if o.ProviderType != "" {
-		fields["ProviderType"] = o.ProviderType
-	}
-	if o.ProviderName != "" {
-		fields["ProviderName"] = o.ProviderName
-	}
-	if o.TokenInName != "" {
-		fields["TokenInName"] = o.TokenInName
-	}
-	if o.SourceChainName != "" {
-		fields["SourceChainName"] = o.SourceChainName
-	}
-	return logrus.WithFields(logrus.Fields{
-		"order": fields,
-	})
 }

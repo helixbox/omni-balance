@@ -16,9 +16,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap/zapcore"
 )
 
 var (
@@ -58,7 +60,7 @@ func Run(ctx context.Context, conf configs.Config) error {
 func runFromQueue(ctx context.Context, conf configs.Config) {
 	defer func() {
 		if err := recover(); err != nil {
-			logrus.Errorf("market job error: %v, restart after 5 second", err)
+			log.Errorf("market job error: %v, restart after 5 second", err)
 			time.Sleep(time.Second * 5)
 			runFromQueue(ctx, conf)
 		}
@@ -74,13 +76,12 @@ func runFromQueue(ctx context.Context, conf configs.Config) {
 			}
 			orders, err := models.ListOrdersByTaskId(ctx, db.DB(), task.Id)
 			if err != nil {
-				logrus.Errorf("get orders by task id error: %s", err.Error())
+				log.Errorf("get orders by task id error: %s", err.Error())
 				continue
 			}
 			if len(orders) == 0 {
 				continue
 			}
-			logrus.Debugf("Start task %s. There are %d orders", task.Id, len(orders))
 			fn := func(orders []models.Order, task Task) func() {
 				processTasks.Store(task.Id, struct{}{})
 				return func() {
@@ -102,7 +103,6 @@ func runFromQueue(ctx context.Context, conf configs.Config) {
 						do(ctx, orders[index], conf)
 					}
 					taskWait.Wait()
-					logrus.Infof("Finish all orders in task %s", task.Id)
 				}
 			}
 			utils.Go(fn(orders, task))
@@ -112,8 +112,7 @@ func runFromQueue(ctx context.Context, conf configs.Config) {
 
 func do(ctx context.Context, order models.Order, conf configs.Config) {
 	defer utils.Recover()
-	log := order.GetLogs()
-	subCtx, cancel := context.WithCancel(utils.SetLogToCtx(ctx, log))
+	subCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	utils.Go(func() {
 		defer cancel()
@@ -150,7 +149,7 @@ func do(ctx context.Context, order models.Order, conf configs.Config) {
 				}),
 				"process order error",
 				fmt.Sprintf("order #%d error: %s, please check the provider configuration then restart the application.", order.ID, err),
-				logrus.ErrorLevel,
+				zapcore.ErrorLevel,
 			)
 			return
 		}
@@ -170,7 +169,7 @@ func do(ctx context.Context, order models.Order, conf configs.Config) {
 		fmt.Sprintf("rebalance %s %s from %s to %s use %s %s",
 			order.TokenOutName, order.Amount, order.SourceChainName, order.TargetChainName,
 			order.ProviderName, order.ProviderType),
-		logrus.InfoLevel,
+		zapcore.InfoLevel,
 	)
 	if err != nil {
 		log.Debugf("notice error: %s", err)
@@ -179,14 +178,13 @@ func do(ctx context.Context, order models.Order, conf configs.Config) {
 }
 
 func processOrder(ctx context.Context, order models.Order, conf configs.Config) error {
-	log := utils.GetLogFromCtx(ctx)
 	if order.Lock(db.DB()) {
 		return errors.Errorf("order #%d locked, unlock time is %s", order.ID, time.Unix(order.LockTime+60*60*1, 0))
 	}
 	defer order.UnLock(db.DB())
 	var (
 		orderProcess = models.GetLastOrderProcess(ctx, db.DB(), order.ID)
-		args         = daemons.CreateSwapParams(order, orderProcess, log, conf.GetWallet(order.Wallet))
+		args         = daemons.CreateSwapParams(order, orderProcess, conf.GetWallet(order.Wallet))
 		wallet       = conf.GetWallet(order.Wallet)
 		token        = conf.GetTokenInfoOnChain(order.TokenOutName, order.TargetChainName)
 		chain        = conf.GetChainConfig(order.TargetChainName)
@@ -205,7 +203,6 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 		if ok {
 			return nil
 		}
-		log.Infof("cannot use transfer, try other providers.")
 	}
 
 	balance, err := wallet.GetExternalBalance(ctx, common.HexToAddress(token.ContractAddress), token.Decimals, client)
@@ -224,7 +221,7 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 		if !balance.GreaterThan(threshold) {
 			break
 		}
-		log.Infof("%s balance on %s is enough, skip", v.Name, order.TargetChainName)
+		log.Debugf("%s balance on %s is enough, skip", v.Name, order.TargetChainName)
 		if err := order.Success(db.DB(), "", nil, balance); err != nil {
 			return errors.Wrap(err, "update order success error")
 		}
@@ -244,8 +241,7 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 		return errors.Wrap(err, "save provider error")
 	}
 
-	log.Infof("start  #%d %s on %s use %s provider", order.ID, order.TokenOutName,
-		order.TargetChainName, providerObj.Name())
+	log.Infof("start swap %s on %s use %s provider", order.TokenOutName, order.TargetChainName, providerObj.Name())
 	args.SourceChainNames = order.TokenInChainNames
 	result, providerErr := providerObj.Swap(ctx, args)
 	if errors.Is(providerErr, context.Canceled) {
@@ -268,7 +264,7 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 		if order.ID == 0 {
 			return errors.New("order not found")
 		}
-		_, err = transfer(ctx, order, daemons.CreateSwapParams(order, orderProcess, log, conf.GetWallet(order.Wallet)), conf, client)
+		_, err = transfer(ctx, order, daemons.CreateSwapParams(order, orderProcess, conf.GetWallet(order.Wallet)), conf, client)
 		if err != nil {
 			return errors.Wrap(err, "transfer error")
 		}

@@ -3,6 +3,7 @@ package multisig
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"omni-balance/utils/constant"
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/wallets"
@@ -13,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
 )
 
@@ -40,7 +40,7 @@ func (s Multisig) MarshalJSON() ([]byte, error) {
 func (s Multisig) GetChainIdByCtx(ctx context.Context) int {
 	chainId := constant.GetChainId(cast.ToString(ctx.Value(constant.ChainNameKeyInCtx)))
 	if chainId == 0 {
-		logrus.Fatalf("chain name not found in context")
+		log.Fatalf("chain name not found in context")
 	}
 	return chainId
 }

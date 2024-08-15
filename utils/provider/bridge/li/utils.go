@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
@@ -41,7 +43,6 @@ func (l Li) Quote(ctx context.Context, args QuoteParams) (Quote, error) {
 
 func (l Li) GetBestQuote(ctx context.Context, args provider.SwapParams) (tokenInName, tokenInChainName string,
 	tokenInAmount decimal.Decimal, quote Quote, err error) {
-	log := utils.GetLogFromCtx(ctx).WithField("name", l.Name())
 	if args.TargetToken == "" || args.TargetChain == "" {
 		return tokenInName, tokenInChainName, tokenInAmount, Quote{}, errors.New("target token or target chain is empty")
 	}
@@ -52,9 +53,6 @@ func (l Li) GetBestQuote(ctx context.Context, args provider.SwapParams) (tokenIn
 
 	getQuote := func(chainName, token string) error {
 		sourceToken := l.conf.GetTokenInfoOnChain(token, chainName)
-		currentLog := log.WithField("TokenIn", sourceToken.Name).WithField("sourceChain", chainName).
-			WithField("TargetToken", args.TargetToken).WithField("TargetChain", args.TargetChain)
-		currentLog.Debug("start check tokenIn")
 		chain := l.conf.GetChainConfig(chainName)
 		tokenIn := l.conf.GetTokenInfoOnChain(sourceToken.Name, chainName)
 		if tokenIn.ContractAddress == "" {
@@ -62,7 +60,7 @@ func (l Li) GetBestQuote(ctx context.Context, args provider.SwapParams) (tokenIn
 		}
 		client, err := chains.NewTryClient(ctx, chain.RpcEndpoints)
 		if err != nil {
-			currentLog.Warnf("get chain %s client error: %s", chain.Name, err)
+			log.Warnf("get chain %s client error: %s", chain.Name, err)
 			return err
 		}
 
@@ -79,10 +77,9 @@ func (l Li) GetBestQuote(ctx context.Context, args provider.SwapParams) (tokenIn
 			ToAddress:     common.HexToAddress(args.Receiver),
 		})
 		if err != nil {
-			currentLog.Debugf("get quote error: %s", err)
+			log.Debugf("get quote error: %s", err)
 			return errors.Wrap(err, "get quote")
 		}
-		currentLog = currentLog.WithField("quote", utils.ToMap(quoteData))
 
 		minimumReceived := chains.WeiToEth(quoteData.Estimate.ToAmountMin.BigInt(), tokenOut.Decimals)
 		needBalance := tokenInTestBalance.Div(minimumReceived).Mul(args.Amount)
@@ -90,21 +87,21 @@ func (l Li) GetBestQuote(ctx context.Context, args provider.SwapParams) (tokenIn
 		balance, err := chains.GetTokenBalance(ctx, client, tokenIn.ContractAddress,
 			args.Sender.GetAddress(true).Hex(), tokenIn.Decimals)
 		if err != nil {
-			currentLog.Debugf("get balance error: %s", err)
+			log.Debugf("get balance error: %s", err)
 			return errors.Wrap(err, "get balance")
 		}
 
 		log.Debugf("need %s balance: %s, wallet %s balance: %s on %s",
 			tokenIn.Name, needBalance, tokenIn.Name, balance, chainName)
 		if needBalance.GreaterThan(balance) {
-			currentLog.Debugf("%s need balance: %s, balance: %s", tokenIn.Name, needBalance, balance)
+			log.Debugf("%s need balance: %s, balance: %s", tokenIn.Name, needBalance, balance)
 			return errors.New("not enough balance")
 		}
 		if tokenInAmount.Equal(decimal.Zero) {
 			tokenInAmount = needBalance
 		}
 		if tokenInAmount.GreaterThan(needBalance) {
-			currentLog.Debugf("need balance: %s, balance: %s", needBalance, balance)
+			log.Debugf("need balance: %s, balance: %s", needBalance, balance)
 			return errors.New("not enough balance")
 		}
 		tokenInAmount = needBalance
@@ -159,7 +156,6 @@ func (l Li) GetBestQuote(ctx context.Context, args provider.SwapParams) (tokenIn
 }
 
 func (l Li) WaitForTx(ctx context.Context, hash common.Hash) error {
-	log := utils.GetLogFromCtx(ctx)
 	var (
 		t     = time.NewTicker(time.Second * 10)
 		count int64
@@ -179,7 +175,7 @@ func (l Li) WaitForTx(ctx context.Context, hash common.Hash) error {
 				continue
 			}
 
-			log.WithFields(utils.ToMap(status)).Infof("tx %s status: %s, substatus: %s", hash, status.Status, status.Substatus)
+			log.Infof("tx %s status: %s, substatus: %s", hash, status.Status, status.Substatus)
 			if status.Status == "" {
 				log.Debugf("tx %s status is empty, try it 1 minute later", hash)
 				time.Sleep(time.Minute)

@@ -4,12 +4,13 @@ import (
 	"context"
 
 	"math/big"
-	"omni-balance/utils"
 	"omni-balance/utils/constant"
 	"omni-balance/utils/erc20"
 	"omni-balance/utils/error_types"
 	"strings"
 	"time"
+
+	log "omni-balance/utils/logging"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -19,7 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
 )
 
@@ -112,7 +112,6 @@ func SignMsg(msg []byte, privateKey string) (sig []byte, err error) {
 }
 
 func WaitForTx(ctx context.Context, client simulated.Client, txHash common.Hash) error {
-	log := utils.GetLogFromCtx(ctx)
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	for {
@@ -126,7 +125,7 @@ func WaitForTx(ctx context.Context, client simulated.Client, txHash common.Hash)
 				return err
 			}
 			if errors.Is(err, ethereum.NotFound) {
-				log.Infof("tx not found, txHash: %s, try again later", txHash.Hex())
+				log.Debugf("tx not found, txHash: %s, try again later", txHash.Hex())
 				continue
 			}
 			if err != nil {
@@ -136,7 +135,7 @@ func WaitForTx(ctx context.Context, client simulated.Client, txHash common.Hash)
 			if tx.Status == 0 {
 				return errors.New("tx failed")
 			}
-			log.Infof("tx success, txHash: %s", txHash.Hex())
+			log.Debugf("tx success, txHash: %s", txHash.Hex())
 			return nil
 		}
 	}
@@ -154,13 +153,6 @@ type TokenApproveParams struct {
 }
 
 func TokenApprove(ctx context.Context, args TokenApproveParams) error {
-	log := utils.GetLogFromCtx(ctx).WithFields(logrus.Fields{
-		"job":          "approve",
-		"tokenAddress": args.TokenAddress.Hex(),
-		"owner":        args.Owner.Hex(),
-		"spender":      args.Spender.Hex(),
-		"amountWei":    args.AmountWei.String(),
-	})
 	contract, err := erc20.NewTokenCaller(args.TokenAddress, args.Client)
 	if err != nil {
 		return errors.Wrap(err, "erc20 caller")
@@ -169,9 +161,9 @@ func TokenApprove(ctx context.Context, args TokenApproveParams) error {
 	if err != nil {
 		return errors.Wrap(err, "erc20 allowance")
 	}
-	log.Debugf("erc20 allowance: %s", allowanceWei)
+	log.Debugf("%s token %s on %s erc20 allowance: %s", args.Spender.Hex(), args.TokenAddress.Hex(), args.ChainId, allowanceWei)
 	if decimal.NewFromBigInt(allowanceWei, 0).GreaterThanOrEqual(args.AmountWei) {
-		log.Debugf("erc20 allowance %s >= %s, skip approve", allowanceWei, args.AmountWei)
+		log.Debugf("%s token %s on %s erc20 allowance %s >= %s, skip approve", args.Spender.Hex(), args.TokenAddress.Hex(), args.ChainId, allowanceWei, args.AmountWei)
 		return nil
 	}
 	erc20Abi, err := erc20.TokenMetaData.GetAbi()
@@ -190,7 +182,7 @@ func TokenApprove(ctx context.Context, args TokenApproveParams) error {
 	if err != nil {
 		return errors.Wrap(err, "erc20 approve")
 	}
-	log.Debugf("erc20 approve txHash: %s", txHash.Hex())
+	log.Debugf("%s token %s on %s erc20 approve txHash: %s", args.Spender.Hex(), args.TokenAddress.Hex(), args.ChainId, txHash.Hex())
 	if args.WaitTransaction != nil {
 		return args.WaitTransaction(ctx, txHash, args.Client)
 	}

@@ -3,11 +3,13 @@ package locks
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
-	"omni-balance/utils"
 	"strings"
 	"sync"
 	"time"
+
+	log "omni-balance/utils/logging"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -28,7 +30,6 @@ func LockKey(values ...any) string {
 }
 
 func LockWithKey(ctx context.Context, key string, noWait ...bool) bool {
-	log := utils.GetLogFromCtx(ctx)
 	tryLock := func() bool {
 		mutex.Lock()
 		defer mutex.Unlock()
@@ -57,9 +58,7 @@ func LockWithKey(ctx context.Context, key string, noWait ...bool) bool {
 			if tryLock() {
 				return true
 			}
-			if log != nil {
-				log.Debugf("%s is locked, waiting...", key)
-			}
+			log.Debugf("%s is locked, waiting...", key)
 		}
 	}
 }

@@ -11,8 +11,9 @@ import (
 	"sync"
 	"time"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 func init() {
@@ -49,9 +50,8 @@ func processOrders(ctx context.Context, conf configs.Config, orders []*models.Or
 		go func(order *models.Order) {
 			defer utils.Recover()
 			defer w.Done()
-			log := order.GetLogs()
-			if err := start(utils.SetLogToCtx(ctx, log), order, conf, log.WithField("order_id", order.ID)); err != nil {
-				log.Errorf("start cross chain error: %s", err)
+			if err := start(ctx, order, conf); err != nil {
+				log.Errorf("order #%d start cross chain error: %s", order.ID, err)
 			}
 		}(order)
 	}
@@ -59,7 +59,7 @@ func processOrders(ctx context.Context, conf configs.Config, orders []*models.Or
 	return nil
 }
 
-func start(ctx context.Context, order *models.Order, conf configs.Config, log *logrus.Entry) error {
+func start(ctx context.Context, order *models.Order, conf configs.Config) error {
 	if order.Lock(db.DB()) {
 		log.Infof("order #%d locked, unlock time is %s", order.ID, time.Unix(order.LockTime+60*60*1, 0))
 		return nil
@@ -74,19 +74,19 @@ func start(ctx context.Context, order *models.Order, conf configs.Config, log *l
 		return errors.Wrap(err, "get bridge error")
 	}
 	orderProcess := models.GetLastOrderProcess(ctx, db.DB(), order.ID)
-	swapParams := daemons.CreateSwapParams(*order, orderProcess, log, wallet)
+	swapParams := daemons.CreateSwapParams(*order, orderProcess, wallet)
 	if order.CurrentChainName != "" && order.CurrentChainName != swapParams.SourceChain {
 		swapParams.SourceToken = order.CurrentChainName
 	}
-	result, err := bridge.Swap(utils.SetLogToCtx(ctx, order.GetLogs()), swapParams)
+	result, err := bridge.Swap(ctx, swapParams)
 	if err != nil {
 		return errors.Wrap(err, "swap error")
 	}
-	update := createUpdateLog(order, result, log)
+	update := createUpdateLog(order, result)
 	return db.DB().Model(&models.Order{}).Where("id = ?", order.ID).Updates(update).Error
 }
 
-func createUpdateLog(order *models.Order, result provider.SwapResult, log *logrus.Entry) map[string]interface{} {
+func createUpdateLog(order *models.Order, result provider.SwapResult) map[string]interface{} {
 	update := map[string]interface{}{
 		"error":              result.Error,
 		"current_chain_name": result.CurrentChain,
@@ -103,7 +103,6 @@ func createUpdateLog(order *models.Order, result provider.SwapResult, log *logru
 func getBridge(ctx context.Context, order *models.Order, conf configs.Config) (provider.Provider, error) {
 	var (
 		bridges []provider.Provider
-		log     = order.GetLogs()
 	)
 	for _, providerInitFunc := range provider.LiquidityProviderTypeAndConf(configs.Bridge, conf) {
 		bridge, err := provider.Init(providerInitFunc, conf)

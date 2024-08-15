@@ -2,11 +2,6 @@ package uniswap
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"math/big"
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
@@ -17,6 +12,13 @@ import (
 	uniswapConfigs "omni-balance/utils/provider/dex/uniswap/configs"
 	"strings"
 	"time"
+
+	log "omni-balance/utils/logging"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 )
 
 var (
@@ -58,7 +60,6 @@ func (u *Uniswap) GetCost(ctx context.Context, args provider.SwapParams) (provid
 
 func (u *Uniswap) Swap(ctx context.Context, args provider.SwapParams) (result provider.SwapResult, err error) {
 	var (
-		log          = utils.GetLogFromCtx(ctx).WithField("provide_name", u.Name())
 		wallet       = args.Sender
 		contract     = uniswapConfigs.GetContractAddress(args.TargetChain)
 		chain        = u.conf.GetChainConfig(args.TargetChain)
@@ -97,13 +98,7 @@ func (u *Uniswap) Swap(ctx context.Context, args provider.SwapParams) (result pr
 		tokenIn         = u.conf.GetTokenInfoOnChain(tokenInPrice.TokenName, chain.Name)
 		isTokenInNative = u.conf.IsNativeToken(chain.Name, tokenIn.Name)
 	)
-	log = log.WithFields(logrus.Fields{
-		"tokenIn":         utils.ToMap(tokenIn),
-		"tokenOut":        utils.ToMap(tokenOut),
-		"amountOut":       amountOut,
-		"isTokenInNative": isTokenInNative,
-	})
-	log.Debugf("start get exact output quote")
+
 	quote, err := u.GetTokenExactOutputQuote(
 		ctx,
 		chain.Name,
@@ -117,8 +112,6 @@ func (u *Uniswap) Swap(ctx context.Context, args provider.SwapParams) (result pr
 	if len(quote.Quote.Route) == 0 {
 		return provider.SwapResult{}, errors.Errorf("no route found")
 	}
-
-	log.WithField("quote", utils.ToMap(quote.Quote)).Debug("get quote success")
 
 	ethClient, err := chains.NewTryClient(ctx, chain.RpcEndpoints)
 	if err != nil {
@@ -202,11 +195,10 @@ func (u *Uniswap) Swap(ctx context.Context, args provider.SwapParams) (result pr
 		Data:     txRawData,
 		Value:    value.BigInt(),
 	}
-	log.WithField("txData", utils.ToMap(txData)).Debug("build tx success")
+
 	var tx = args.LastHistory.Tx
 	if actionNumber <= 1 && !isActionSuccess {
 		recordFn(sh.SetStatus(provider.TxStatusPending).SetActions(SwapTXSendingAction).Out())
-		log.Debug("sending tx")
 		txHash, err := wallet.SendTransaction(ctx, txData, ethClient)
 		if err != nil {
 			recordFn(sh.SetStatus(provider.TxStatusFailed).SetActions(SwapTXSendingAction).Out(), err)
@@ -216,7 +208,6 @@ func (u *Uniswap) Swap(ctx context.Context, args provider.SwapParams) (result pr
 		sr = sr.SetTx(tx).SetOrderId(tx)
 		sh = sh.SetTx(tx)
 
-		log.WithField("txHash", tx).Debug("send tx success")
 		recordFn(sh.SetActions(SwapTXSendingAction).SetStatus(provider.TxStatusSuccess).Out())
 	}
 	if tx == "" {
@@ -225,14 +216,12 @@ func (u *Uniswap) Swap(ctx context.Context, args provider.SwapParams) (result pr
 		return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), err
 	}
 	if actionNumber <= 2 && !isActionSuccess {
-		log.Debug("waiting tx")
 		if err := wallet.WaitTransaction(ctx, common.HexToHash(tx), ethClient); err != nil {
 			recordFn(sh.SetStatus(provider.TxStatusFailed).SetActions(SwapTXReceivedAction).Out(), err)
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), err
 		}
 		recordFn(sh.SetStatus(provider.TxStatusSuccess).SetActions(SwapTXReceivedAction).Out())
 	}
-	log.Debug("tx success")
 	return sr.SetStatus(provider.TxStatusSuccess).Out(), nil
 }
 

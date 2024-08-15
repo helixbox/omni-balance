@@ -26,9 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
+	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
 )
 
@@ -119,7 +119,7 @@ func (s *Safe) GetChainIdByCtx(ctx context.Context) int {
 	chainId := constant.GetChainId(cast.ToString(ctx.Value(constant.ChainNameKeyInCtx)))
 	if chainId == 0 {
 		debug.PrintStack()
-		logrus.Fatalf("chain name not found in context")
+		log.Fatalf("chain name not found in context")
 	}
 	return chainId
 }
@@ -137,20 +137,17 @@ func (s *Safe) Client(ctx context.Context) *apiclient.SafeTransactionServiceAPI 
 	c := httptransport.New(
 		s.GetDomainByCtx(ctx), apiclient.DefaultBasePath, apiclient.DefaultSchemes)
 	c.Context = ctx
-	c.SetLogger(logrus.New())
 	return apiclient.New(c, strfmt.Default)
 }
 
 func (s *Safe) Transfer(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
 	if s.operatorSafe != nil {
-		utils.GetLogFromCtx(ctx).Debugf("transfer use operator safe")
 		return s.operatorSafe.SendTransaction(ctx, tx, client)
 	}
 	return chains.SendTransaction(ctx, client, tx, s.GetAddress(true), s.conf.Operator.PrivateKey)
 }
 
 func (s *Safe) MultisigTransaction(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
-	log := utils.GetLogFromCtx(ctx)
 	if tx.Nonce == 0 {
 		nonce, err := s.nonce(ctx)
 		if err != nil {

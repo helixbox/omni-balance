@@ -11,10 +11,11 @@ import (
 	"omni-balance/utils/constant"
 	"omni-balance/utils/provider"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	uuid "github.com/satori/go.uuid"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
 func APIKey(conf configs.Config, next func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +82,6 @@ func GateLiquidity(conf configs.Config) func(w http.ResponseWriter, r *http.Requ
 			TaskId:          uuid.NewV4().String(),
 		}
 		if err := db.DB().Create(o).Error; err != nil {
-			o.GetLogs().Errorf("create order error: %s", err.Error())
 			http.Error(w, "create order error: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -89,7 +89,7 @@ func GateLiquidity(conf configs.Config) func(w http.ResponseWriter, r *http.Requ
 			Id:          o.TaskId,
 			ProcessType: bot.Queue,
 		})
-		logrus.Infof("create %s from %s to %s success", args.TokenName, args.FromChain, args.ToChain)
+		log.Infof("create %s from %s to %s success", args.TokenName, args.FromChain, args.ToChain)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("success"))
 	})

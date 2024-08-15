@@ -3,17 +3,19 @@ package gate
 import (
 	"context"
 	"fmt"
-	"github.com/antihax/optional"
-	"github.com/gateio/gateapi-go/v6"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"omni-balance/utils"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/provider"
 	"strings"
 	"time"
+
+	log "omni-balance/utils/logging"
+
+	"github.com/antihax/optional"
+	"github.com/gateio/gateapi-go/v6"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 )
 
 var (
@@ -86,12 +88,6 @@ func (g *Gate) Swap(ctx context.Context, args provider.SwapParams) (provider.Swa
 			}
 			args.RecordFn(s, errs...)
 		}
-		log = logrus.WithFields(logrus.Fields{
-			"provider":    g.Name(),
-			"amount":      args.Amount,
-			"tokenOut":    args.TargetToken,
-			"targetChain": args.TargetChain,
-		})
 		wallet = args.Sender
 	)
 
@@ -171,7 +167,7 @@ func (g *Gate) Swap(ctx context.Context, args provider.SwapParams) (provider.Swa
 	if buyAmount.GreaterThan(decimal.Zero) && actionNumber <= 1 && !isActionSuccess { // buy token
 		recordFn(sh.SetActions(PurchasedAction).SetStatus(provider.TxStatusPending).Out())
 		order, err := g.buyToken(ctx, tokenIn, args.TargetToken, buyAmount.Abs(), func(order gateapi.Order) bool {
-			logrus.Debugf("wait for order %s filled, the status is %s", order.Id, order.Status)
+			log.Debugf("wait for order %s filled, the status is %s", order.Id, order.Status)
 			return false
 		})
 		if err != nil {
@@ -213,7 +209,7 @@ func (g *Gate) Swap(ctx context.Context, args provider.SwapParams) (provider.Swa
 	}
 
 	for {
-		logrus.Debugf("wait for %s withdraw order done", withdrawOrderId)
+		log.Debugf("wait for %s withdraw order done", withdrawOrderId)
 		withdrawalRecords, _, err := g.client.WalletApi.ListWithdrawals(ctx, &gateapi.ListWithdrawalsOpts{
 			Currency: optional.NewString(args.TargetToken),
 		})
@@ -268,12 +264,6 @@ func (g *Gate) Swap(ctx context.Context, args provider.SwapParams) (provider.Swa
 }
 
 func (g *Gate) GetCost(ctx context.Context, args provider.SwapParams) (provider.TokenInCosts, error) {
-	log := logrus.WithFields(logrus.Fields{
-		"tokenOut":    args.TargetToken,
-		"targetChain": args.TargetChain,
-		"amount":      args.Amount,
-		"wallet":      args.Sender,
-	})
 	verifiedAddress, _, err := g.client.WalletApi.ListSavedAddress(ctx, args.TargetToken, &gateapi.ListSavedAddressOpts{})
 	if err != nil {
 		return nil, errors.Wrap(err, "list saved address")

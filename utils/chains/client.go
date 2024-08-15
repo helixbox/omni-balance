@@ -2,15 +2,16 @@ package chains
 
 import (
 	"context"
+	"math/big"
+	"sync/atomic"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
-	"math/big"
-	"sync/atomic"
 )
 
 type MockClient interface {
@@ -29,7 +30,7 @@ func NewTryClient(ctx context.Context, endpoints []string) (*Client, error) {
 	for _, v := range endpoints {
 		client, err := ethclient.DialContext(ctx, v)
 		if err != nil {
-			logrus.Warnf("dial %s error: %s", v, err)
+			log.Warnf("dial %s error: %s", v, err)
 			continue
 		}
 		t.clients = append(t.clients, client)

@@ -15,9 +15,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
 type BuildTxParams struct {
@@ -160,7 +160,7 @@ func (u *Uniswap) GetTokenIns(ctx context.Context, chainName, tokenOutName strin
 	chain := u.conf.GetChainConfig(chainName)
 	client, err := chains.NewTryClient(ctx, chain.RpcEndpoints)
 	if err != nil {
-		logrus.Warnf("get %s chain client error: %s", chainName, err)
+		log.Warnf("get %s chain client error: %s", chainName, err)
 		return
 	}
 	defer client.Close()
@@ -177,13 +177,13 @@ func (u *Uniswap) GetTokenIns(ctx context.Context, chainName, tokenOutName strin
 			continue
 		}
 		if err != nil {
-			logrus.Warnf("get quote error: %s", err)
+			log.Warnf("get quote error: %s", err)
 			continue
 		}
 
 		tokenInBalance, err := chains.GetTokenBalance(ctx, client, tokenIn.ContractAddress, wallet.Hex(), tokenIn.Decimals)
 		if err != nil {
-			logrus.Warnf("get balance error: %s", err)
+			log.Warnf("get balance error: %s", err)
 			continue
 		}
 		if tokenInBalance.Cmp(decimal.RequireFromString(result.Quote.QuoteDecimals)) < 0 {

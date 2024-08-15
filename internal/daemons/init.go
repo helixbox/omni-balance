@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	log "omni-balance/utils/logging"
 )
 
 type TaskFunc func(ctx context.Context, conf configs.Config) error
@@ -75,7 +75,7 @@ func RegisterIntervalTask(task Task) {
 func runForever(ctx context.Context, conf configs.Config, task Task) {
 	defer func() {
 		if err := recover(); err != nil {
-			logrus.Errorf("task %s failed, err: %v, will retry after 2s", task.Name, err)
+			log.Errorf("task %s failed, err: %v, will retry after 2s", task.Name, err)
 			debug.PrintStack()
 			time.Sleep(time.Second * 2)
 			runForever(ctx, conf, task)
@@ -88,15 +88,15 @@ func runForever(ctx context.Context, conf configs.Config, task Task) {
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Infof("task %s stopped", task.Name)
+			log.Infof("task %s stopped", task.Name)
 			return
 		case <-t.C:
 			if !utils.IsFinishedInit() {
-				logrus.Infof("task %s waiting for init finished", task.Name)
+				log.Infof("task %s waiting for init finished", task.Name)
 				continue
 			}
 			if err := task.TaskFunc(ctx, conf); err != nil {
-				logrus.Errorf("task %s failed, err: %v", task.Name, err)
+				log.Errorf("task %s failed, err: %v", task.Name, err)
 			}
 			t.Reset(interval)
 		}
@@ -106,17 +106,17 @@ func runForever(ctx context.Context, conf configs.Config, task Task) {
 func Run(ctx context.Context, conf configs.Config) error {
 	for index := range tasks {
 		if tasks[index].RunOnStart {
-			logrus.Debugf("task %s run on start, wait for the task finished", tasks[index].Name)
+			log.Debugf("task %s run on start, wait for the task finished", tasks[index].Name)
 			if err := tasks[index].TaskFunc(ctx, conf); err != nil {
-				logrus.Errorf("task %s failed, err: %v", tasks[index].Name, err)
+				log.Errorf("task %s failed, err: %v", tasks[index].Name, err)
 				continue
 			}
-			logrus.Debugf("task %s run on start finished", tasks[index].Name)
+			log.Debugf("task %s run on start finished", tasks[index].Name)
 			continue
 		}
 	}
 	for index := range tasks {
-		logrus.Debugf("task %s run in background", tasks[index].Name)
+		log.Debugf("task %s run in background", tasks[index].Name)
 		go runForever(ctx, conf, tasks[index])
 	}
 	return nil

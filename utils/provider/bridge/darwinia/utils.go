@@ -21,9 +21,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
 // GetSourceChains returns the list of source chain IDs that support transferring the specified token to the target chain.
@@ -94,28 +94,21 @@ func (b *Bridge) checkAndAppendSourceChainIfBalanceSufficient(ctx context.Contex
 	balance, err := b.GetBalance(ctx,
 		provider.BalanceParams{Token: TokenName, Chain: constant.GetChainName(sourceChain), Wallet: wallet})
 	if err != nil {
-		logrus.Debugf("get %s balance error: %s", constant.GetChainName(sourceChain), err)
+		log.Debugf("get %s balance error: %s", constant.GetChainName(sourceChain), err)
 		return
 	}
 
 	if !balance.GreaterThanOrEqual(amount) {
-		logrus.Debugf("check %s balance: %s < %s", constant.GetChainName(sourceChain), balance, amount)
+		log.Debugf("check %s balance: %s < %s", constant.GetChainName(sourceChain), balance, amount)
 		return
 	}
-	logrus.Debugf("check %s balance: %s >= %s", constant.GetChainName(sourceChain), balance, amount)
+	log.Debugf("check %s balance: %s >= %s", constant.GetChainName(sourceChain), balance, amount)
 	m.Lock()
 	defer m.Unlock()
 	*sourceChainIds = append(*sourceChainIds, sourceChain)
 }
 
 func (b *Bridge) WaitForBridgeSuccess(ctx context.Context, tx, sender string) (HistoryRecord, error) {
-	log := logrus.WithFields(logrus.Fields{
-		"tx":      tx,
-		"sender":  sender,
-		"chain":   b.Name(),
-		"type":    b.Type(),
-		"message": "wait for bridge success",
-	})
 	requestData := GraphQLRequest{
 		OperationName: "GetHistory",
 		Variables: map[string]interface{}{

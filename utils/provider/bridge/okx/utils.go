@@ -18,10 +18,11 @@ import (
 	"strings"
 	"time"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
 type QuoteParams struct {
@@ -71,7 +72,6 @@ func (o *OKX) request(ctx context.Context, method string, path string, params ur
 	u.RawPath = path
 	u.Path = path
 	u.RawQuery = params.Encode()
-	utils.GetLogFromCtx(ctx).Debugf("request url: %s", u.String())
 	if err := utils.Request(ctx, method, u.String(), bodyReader, dest, headersList...); err != nil {
 		return err
 	}
@@ -79,7 +79,6 @@ func (o *OKX) request(ctx context.Context, method string, path string, params ur
 }
 
 func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams) (tokenInName, tokenInChainName string, tokenInAmount decimal.Decimal, err error) {
-	log := utils.GetLogFromCtx(ctx)
 	if args.TargetToken == "" || args.TargetChain == "" {
 		return "", "", tokenInAmount, errors.New("target token or target chain is empty")
 	}
@@ -88,9 +87,6 @@ func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams)
 	)
 	getQuote := func(chainName, tokenName string) error {
 		sourceToken := o.conf.GetTokenInfoOnChain(tokenName, chainName)
-		currentLog := log.WithField("TokenIn", sourceToken.Name).WithField("sourceChain", chainName).
-			WithField("TargetToken", args.TargetToken).WithField("TargetChain", args.TargetChain)
-		currentLog.Debug("start check tokenIn")
 		chain := o.conf.GetChainConfig(chainName)
 		tokenIn := o.conf.GetTokenInfoOnChain(sourceToken.Name, chainName)
 		if tokenIn.ContractAddress == "" {
@@ -98,7 +94,7 @@ func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams)
 		}
 		client, err := chains.NewTryClient(ctx, chain.RpcEndpoints)
 		if err != nil {
-			currentLog.Debugf("new client error: %s", err)
+			log.Debugf("new client error: '%s' with %+v", err, chain.RpcEndpoints)
 			return err
 		}
 
@@ -112,15 +108,11 @@ func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams)
 			FromTokenAddress: common.HexToAddress(tokenIn.ContractAddress),
 		})
 		if err != nil {
-			currentLog.Debugf("get quote error: %s", err)
-			return err
+			return errors.Wrap(err, "get quote")
 		}
 		if len(quote.RouterList) == 0 {
-			currentLog.Debugf("no router list")
 			return errors.Errorf("no router list")
 		}
-		currentLog = currentLog.WithField("quote", utils.ToMap(quote))
-		currentLog.Debug("get quote success")
 
 		minimumReceived := chains.WeiToEth(quote.RouterList[0].MinimumReceived.BigInt(), tokenOut.Decimals)
 		needBalance := tokenInTestBalance.Div(minimumReceived).Mul(args.Amount)
@@ -128,22 +120,16 @@ func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams)
 		balance, err := chains.GetTokenBalance(ctx, client, tokenIn.ContractAddress,
 			args.Sender.GetAddress(true).Hex(), tokenIn.Decimals)
 		if err != nil {
-			currentLog.Debugf("get balance error: %s", err)
 			return err
 		}
-
-		log.Debugf("need %s balance: %s, wallet %s balance: %s on %s",
-			tokenIn.Name, needBalance, tokenIn.Name, balance, chainName)
 		if needBalance.GreaterThan(balance) {
-			currentLog.Debugf("%s need balance: %s, balance: %s", tokenIn.Name, needBalance, balance)
-			return errors.Errorf("need %s balance: %s, balance: %s", tokenIn.Name, needBalance, balance)
+			return errors.Errorf("wallet balance is not enough")
 		}
 		if tokenInAmount.Equal(decimal.Zero) {
 			tokenInAmount = needBalance
 		}
 		if tokenInAmount.GreaterThan(needBalance) {
-			currentLog.Debugf("need balance: %s, balance: %s", needBalance, balance)
-			return errors.Errorf("need %s balance: %s, balance: %s", tokenIn.Name, needBalance, balance)
+			return errors.Errorf("need balance is greater than balance")
 		}
 		tokenInAmount = needBalance
 		tokenInName = sourceToken.Name
@@ -175,9 +161,8 @@ func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams)
 	if tokenInChainName == "" || tokenInName == "" || tokenInAmount.IsZero() {
 		return "", "", tokenInAmount, error_types.ErrUnsupportedTokenAndChain
 	}
-	log.Debugf("best tokenInName: %s, tokenInChainName: %s, tokenInAmount: %s", tokenInName, tokenInChainName, tokenInAmount)
+	log.Debugf("#%d best route for %s %s is use %s %s token from %s chain", args.OrderId, args.TargetChain, args.TargetToken, tokenInAmount, tokenInName, tokenInChainName)
 	return
-
 }
 
 func (o *OKX) approveTransaction(ctx context.Context, chainId int, tokenAddress common.Address, amountWei decimal.Decimal) (ApproveTransaction, error) {
@@ -239,10 +224,6 @@ func (o *OKX) TxStatus(ctx context.Context, hash common.Hash, sourceChainId int)
 }
 
 func (o *OKX) WaitForTx(ctx context.Context, hash common.Hash, sourceChainId int) error {
-	log := utils.GetLogFromCtx(ctx).WithFields(logrus.Fields{
-		"chain_id": sourceChainId,
-		"hash":     hash,
-	})
 	var (
 		t     = time.NewTicker(time.Second * 2)
 		count = 0
@@ -257,7 +238,6 @@ func (o *OKX) WaitForTx(ctx context.Context, hash common.Hash, sourceChainId int
 			if err != nil {
 				return err
 			}
-			log = log.WithField("okx_ts_status", s.ToMap())
 			log.Infof("tx status: %s, detail status: %s", s.Status, okxWaitForTxStatus[s.DetailStatus])
 			switch s.Status {
 			case "PENDING":

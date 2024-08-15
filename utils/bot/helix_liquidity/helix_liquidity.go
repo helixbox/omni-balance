@@ -8,8 +8,8 @@ import (
 	"omni-balance/utils/provider/bridge/helix_liquidity_claim"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/labstack/gommon/log"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
 func init() {
@@ -20,12 +20,6 @@ type HelixLiquidity struct {
 }
 
 func (h HelixLiquidity) Check(ctx context.Context, args bot.Params) ([]bot.Task, bot.ProcessType, error) {
-	log := logrus.WithFields(logrus.Fields{
-		"bot":    h.Name(),
-		"wallet": args.Info.Wallet.GetAddress().Hex(),
-		"chain":  args.Info.Chain,
-		"token":  args.Info.TokenName,
-	})
 	hlc, err := helix_liquidity_claim.New(args.Conf)
 	if err != nil {
 		return nil, bot.Parallel, err

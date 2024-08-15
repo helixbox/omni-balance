@@ -9,11 +9,12 @@ import (
 	"strings"
 	"time"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
 // ProviderType liquidity providersMap type
@@ -39,7 +40,6 @@ const (
 )
 
 type Config struct {
-	Debug  bool   `json:"debug" yaml:"debug" comment:"Debug mode"`
 	ApiKey string `json:"api_key" yaml:"apiKey" comment:"API key"`
 
 	// Chains need to be monitored
@@ -424,7 +424,7 @@ func (c *Config) GetProvidersConfig(name string, providerType ProviderType, dest
 func (c *Config) GetChainConfig(chainName string) Chain {
 	chain := c.chainsMap[chainName]
 	if chain.Name == "" {
-		logrus.Panicf("chain %s not found, config: %+v", chainName, c.chainsMap)
+		log.Fatalf("chain %s not found, config: %+v", chainName, c.chainsMap)
 	}
 	return chain
 }
@@ -528,7 +528,7 @@ func (c *Config) GetTokenPurchaseAmount(wallet, tokenName, chain string) decimal
 func (c *Config) GetTokenAddress(tokenName, chainName string) string {
 	address := c.GetTokenInfoOnChain(tokenName, chainName).ContractAddress
 	if address == "" {
-		logrus.Fatalf("token %s not found on chain %s", tokenName, chainName)
+		log.Fatalf("token %s not found on chain %s", tokenName, chainName)
 	}
 	return address
 }

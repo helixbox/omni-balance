@@ -4,10 +4,11 @@ import (
 	"context"
 	"omni-balance/utils/bot"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
 func init() {
@@ -27,12 +28,6 @@ func (b BalanceOnChain) Check(ctx context.Context, args bot.Params) ([]bot.Task,
 		config = args.Conf
 		info   = args.Info
 		tasks  []bot.Task
-		log    = logrus.WithFields(logrus.Fields{
-			"wallet":    args.Info.Wallet.GetAddress(),
-			"chain":     args.Info.Chain,
-			"tokenName": args.Info.TokenName,
-			"job":       b.Name(),
-		})
 	)
 	token := config.GetTokenInfoOnChain(info.TokenName, args.Info.Chain)
 	balance, err := info.Wallet.GetExternalBalance(ctx, common.HexToAddress(token.ContractAddress), token.Decimals, args.Client)
@@ -41,7 +36,7 @@ func (b BalanceOnChain) Check(ctx context.Context, args bot.Params) ([]bot.Task,
 	}
 	threshold := config.GetTokenThreshold(info.Wallet.GetAddress().Hex(), info.TokenName, info.Chain)
 	if balance.GreaterThan(threshold) {
-		log.Debugf("%s balance on %s chain is enough, balance: %s;threshold: %s", info.TokenName, info.Chain, balance.String(), threshold.String())
+		log.Debugf("wallet %s on %s chain %s token balance is enough, current balance %s, threshold %s", info.Wallet.GetAddress().Hex(), info.Chain, info.TokenName, balance.String(), threshold.String())
 		return nil, "", nil
 	}
 	amount := config.GetTokenPurchaseAmount(info.Wallet.GetAddress().Hex(), info.TokenName, info.Chain)
@@ -51,7 +46,7 @@ func (b BalanceOnChain) Check(ctx context.Context, args bot.Params) ([]bot.Task,
 			info.Wallet.GetAddress(), balance, amount, balance, amount, threshold, newAmount)
 		amount = newAmount
 	}
-	log.Debugf("balance on chain is not enough, balance: %s;threshold: %s", balance.String(), threshold.String())
+	log.Infof("balance on chain is not enough, start rebalance, current balance %s, threshold %s", balance.String(), threshold.String())
 	tasks = append(tasks, bot.Task{
 		TokenOutChainName: args.Info.Chain,
 		Wallet:            info.Wallet.GetAddress().Hex(),

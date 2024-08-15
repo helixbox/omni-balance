@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
@@ -13,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	log "omni-balance/utils/logging"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -94,20 +97,17 @@ func (r Routernitro) BuildTx(ctx context.Context, quote Quote, sender, receiver 
 
 func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams) (tokenInName, tokenInChainName string,
 	tokenInAmount decimal.Decimal, quote Quote, err error) {
-	log := utils.GetLogFromCtx(ctx).WithField("name", r.Name())
 	if args.TargetToken == "" || args.TargetChain == "" {
 		return tokenInName, tokenInChainName, tokenInAmount, Quote{}, errors.New("target token or target chain is empty")
 	}
 
 	var (
 		tokenOut = r.conf.GetTokenInfoOnChain(args.TargetToken, args.TargetChain)
+		msg      = fmt.Sprintf("wallet %s rebalance %s on %s", args.Sender.GetAddress(true), args.Receiver, args.TargetToken, args.TargetChain)
 	)
 
 	getQuote := func(chainName, token string) error {
 		sourceToken := r.conf.GetTokenInfoOnChain(token, chainName)
-		currentLog := log.WithField("TokenIn", sourceToken.Name).WithField("sourceChain", chainName).
-			WithField("TargetToken", args.TargetToken).WithField("TargetChain", args.TargetChain)
-		currentLog.Debug("start check tokenIn")
 		chain := r.conf.GetChainConfig(chainName)
 		tokenIn := r.conf.GetTokenInfoOnChain(sourceToken.Name, chainName)
 		if tokenIn.ContractAddress == "" {
@@ -115,7 +115,7 @@ func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams)
 		}
 		client, err := chains.NewTryClient(ctx, chain.RpcEndpoints)
 		if err != nil {
-			currentLog.Warnf("get chain %s client error: %s", chain.Name, err)
+			log.Warnf("#%d %s %s get chain %s client error: %s", args.OrderId, msg, tokenIn.Name, chain.Name, err)
 			return err
 		}
 
@@ -129,10 +129,9 @@ func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams)
 			ToTokenChainId:   constant.GetChainId(args.TargetChain),
 		})
 		if err != nil {
-			currentLog.Debugf("get quote error: %s", err)
+			log.Debugf("#%d %s %s get quote error: %s", args.OrderId, msg, tokenIn.Name, err)
 			return errors.Wrap(err, "get quote")
 		}
-		currentLog = currentLog.WithField("quote", utils.ToMap(quoteData))
 
 		minimumReceived := chains.WeiToEth(quoteData.Destination.TokenAmount.BigInt(), tokenOut.Decimals)
 		needBalance := tokenInTestBalance.Div(minimumReceived).Mul(args.Amount)
@@ -140,21 +139,20 @@ func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams)
 		balance, err := chains.GetTokenBalance(ctx, client, tokenIn.ContractAddress,
 			args.Sender.GetAddress(true).Hex(), tokenIn.Decimals)
 		if err != nil {
-			currentLog.Debugf("get balance error: %s", err)
 			return errors.Wrap(err, "get balance")
 		}
 
-		log.Debugf("need %s balance: %s, wallet %s balance: %s on %s",
-			tokenIn.Name, needBalance, tokenIn.Name, balance, chainName)
+		log.Debugf("#%d %s %s need %s balance: %s, wallet %s balance: %s on %s",
+			args.OrderId, msg, tokenIn.Name, tokenIn.Name, needBalance, tokenIn.Name, balance, chainName)
 		if needBalance.GreaterThan(balance) {
-			currentLog.Debugf("%s need balance: %s, balance: %s", tokenIn.Name, needBalance, balance)
+			log.Debugf("#%d %s %s need balance: %s, balance: %s", args.OrderId, msg, tokenIn.Name, needBalance, balance)
 			return errors.New("not enough balance")
 		}
 		if tokenInAmount.Equal(decimal.Zero) {
 			tokenInAmount = needBalance
 		}
 		if tokenInAmount.GreaterThan(needBalance) {
-			currentLog.Debugf("need balance: %s, balance: %s", needBalance, balance)
+			log.Debugf("#%d %s %s need balance: %s, balance: %s", args.OrderId, msg, tokenIn.Name, needBalance, balance)
 			return errors.New("not enough balance")
 		}
 		tokenInAmount = needBalance
@@ -203,7 +201,7 @@ func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams)
 		return tokenInName, tokenInChainName, tokenInAmount, Quote{}, err
 	}
 	quote = quoteData
-	log.Debugf("best tokenInName: %s, tokenInChainName: %s, tokenInAmount: %s", tokenInName, tokenInChainName, tokenInAmount)
+	log.Debugf("#%d %s %s best tokenInName: %s, tokenInChainName: %s, tokenInAmount: %s", args.OrderId, msg, tokenIn.Name, tokenInName, tokenInChainName, tokenInAmount)
 	return
 }
 
@@ -248,7 +246,6 @@ type Status struct {
 }
 
 func (r Routernitro) WaitForTx(ctx context.Context, hash common.Hash) error {
-	log := utils.GetLogFromCtx(ctx)
 	var (
 		t     = time.NewTicker(time.Second * 2)
 		count int64
@@ -267,7 +264,7 @@ func (r Routernitro) WaitForTx(ctx context.Context, hash common.Hash) error {
 				log.Debugf("tx %s not found, count: %d", hash, count)
 				continue
 			}
-			log.WithFields(utils.ToMap(status)).Infof("tx %s status: %s", hash, status.Data.FindNitroTransactionByFilter.Status)
+			log.Infof("tx %s status: %s", hash, status.Data.FindNitroTransactionByFilter.Status)
 			switch status.Data.FindNitroTransactionByFilter.Status {
 			case pendingStatus:
 				count = 0

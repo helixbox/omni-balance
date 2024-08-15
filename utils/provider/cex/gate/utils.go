@@ -14,12 +14,13 @@ import (
 	"strings"
 	"time"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/antihax/optional"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gateio/gateapi-go/v6"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -131,7 +132,7 @@ func (g *Gate) GetTokenOutChain(ctx context.Context, token string) ([]string, er
 	var supportedChains []string
 	for _, v := range chains {
 		if _, ok := gateChain2StandardName[v.Chain]; !ok {
-			logrus.Debugf("chain %s not supported in %s", v.Chain, token)
+			log.Debugf("chain %s not supported in %s", v.Chain, token)
 			continue
 		}
 		if v.IsWithdrawDisabled == 1 {
@@ -157,9 +158,6 @@ func (g *Gate) buyToken(ctx context.Context, tokenIn provider.TokenInCost, targe
 		Price:        tokenIn.CostAmount.Div(amount).String(),
 		Amount:       amount.String(),
 	}
-	logrus.WithFields(logrus.Fields{
-		"order": order,
-	}).Debugf("buy token")
 
 	// place order
 	order, _, err = g.client.SpotApi.CreateOrder(ctx, order)
@@ -328,7 +326,6 @@ func (g *Gate) ProvideLiquidity(ctx context.Context, args provider.SwapParams) (
 			}
 			args.RecordFn(s, errs...)
 		}
-		log    = args.GetLogs(g.Name() + "_ProvideLiquidity")
 		wallet = args.Sender
 		sr     = new(provider.SwapResult).
 			SetTokenInName(args.SourceToken).
@@ -448,7 +445,7 @@ func (g *Gate) ProvideLiquidity(ctx context.Context, args provider.SwapParams) (
 	if actionNumber <= 3 && !isActionSuccess {
 		log.Debugf("start wait for %s deposit from %s to gate, tx is %s", args.SourceToken, args.SourceChain, tx)
 		recordFn(sh.SetActions(ProvideLiquidityActionGateRechargeTxWaiting).SetStatus(provider.TxStatusPending).Out())
-		err := g.WaitForDeposit(ctx, args.TargetToken, args.SourceChain, common.HexToHash(tx), log)
+		err := g.WaitForDeposit(ctx, args.TargetToken, args.SourceChain, common.HexToHash(tx))
 		if err != nil {
 			recordFn(sh.SetActions(ProvideLiquidityActionGateRechargeTxWaiting).SetStatus(provider.TxStatusFailed).Out(), err)
 			return sr.SetError(err).Out(), err
@@ -489,7 +486,7 @@ func (g *Gate) ProvideLiquidity(ctx context.Context, args provider.SwapParams) (
 
 	if actionNumber <= 6 && !isActionSuccess {
 		recordFn(sh.SetActions(ProvideLiquidityActionGateWithdrawWaiting).SetStatus(provider.TxStatusPending).Out())
-		err := g.WaitForWithdrawal(ctx, withdrawOrderId, args.SourceToken, args.TargetChain, log)
+		err := g.WaitForWithdrawal(ctx, withdrawOrderId, args.SourceToken, args.TargetChain)
 		if err != nil {
 			recordFn(sh.SetActions(ProvideLiquidityActionGateWithdrawWaiting).SetStatus(provider.TxStatusFailed).Out(), err)
 			return sr.SetError(err).Out(), err
@@ -517,7 +514,7 @@ func (g *Gate) ProvideLiquidity(ctx context.Context, args provider.SwapParams) (
 
 }
 
-func (g *Gate) WaitForDeposit(ctx context.Context, tokenName, chainName string, tx common.Hash, log *logrus.Entry) error {
+func (g *Gate) WaitForDeposit(ctx context.Context, tokenName, chainName string, tx common.Hash) error {
 	var (
 		t = time.NewTicker(time.Second * 5)
 	)
@@ -543,7 +540,7 @@ func (g *Gate) WaitForDeposit(ctx context.Context, tokenName, chainName string, 
 	}
 }
 
-func (g *Gate) WaitForWithdrawal(ctx context.Context, withdrawOrderId, tokenName, targetChain string, log *logrus.Entry) error {
+func (g *Gate) WaitForWithdrawal(ctx context.Context, withdrawOrderId, tokenName, targetChain string) error {
 	var t = time.NewTicker(time.Second * 5)
 	defer t.Stop()
 	for {

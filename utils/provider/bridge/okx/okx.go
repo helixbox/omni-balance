@@ -2,11 +2,6 @@ package okx
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
@@ -14,6 +9,12 @@ import (
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/provider"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/labstack/gommon/log"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 )
 
 func init() {
@@ -103,7 +104,7 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		return provider.SwapResult{}, err
 	}
 	if args.SourceChain == "" || args.SourceToken == "" {
-		utils.GetLogFromCtx(ctx).Fatalf("source chain and token is required")
+		log.Fatalf("#%d %s source chain and token is required", args.OrderId, args.TargetToken)
 	}
 
 	tokenIn = o.conf.GetTokenInfoOnChain(args.SourceToken, args.SourceChain)
@@ -122,16 +123,6 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		return provider.SwapResult{}, errors.New("token out amount is zero")
 	}
 	ctx = context.WithValue(ctx, constant.ChainNameKeyInCtx, sourceChain.Name)
-
-	log := utils.GetLogFromCtx(ctx).WithFields(logrus.Fields{
-		"sourceChain":         sourceChain.Name,
-		"tokenIn":             tokenIn.Name,
-		"targetChain":         targetChain.Name,
-		"tokenOut":            tokenOut.Name,
-		"tokenInAmount":       tokenInAmount,
-		"wallet":              args.Sender.GetAddress(),
-		"realOperatorAddress": args.Sender.GetAddress(true),
-	})
 
 	client, err := chains.NewTryClient(ctx, sourceChain.RpcEndpoints)
 	if err != nil {
@@ -154,9 +145,8 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 			Tx:           history.Tx,
 		}
 	)
-
 	if !isTokenInNative && actionNumber <= 1 && !isActionSuccess {
-		log.Debug("the source token is not native token, need approve")
+		log.Debugf("#%d %s is not native token, need approve", args.OrderId, tokenIn.Name)
 		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
 			OrderId:         args.OrderId,
 			TokenIn:         tokenIn.Name,
@@ -192,7 +182,7 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 			args.RecordFn(sh.SetActions(ApproveTransactionAction).SetStatus(provider.TxStatusFailed).Out(), err)
 			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
 		}
-		log.Debugf("approve transaction success")
+		log.Debugf("#%d %s approve transaction success", args.OrderId, tokenIn.Name)
 		args.RecordFn(sh.SetActions(ApproveTransactionAction).SetStatus(provider.TxStatusSuccess).Out())
 	}
 
@@ -211,15 +201,11 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 			TokenOutAmount:  tokenOutAmount,
 			TransactionType: provider.SwapTransactionAction,
 		})
-		log = log.WithField("swap_params", utils.ToMap(args))
-		log.Debug("start build tx")
 		buildTx, err := o.buildTx(ctx, args)
 		if err != nil {
 			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "build tx error")
 		}
 		sr = sr.SetOrder(buildTx)
-
-		log.WithField("tx_data", buildTx.ToMap()).Debugf("get tx data from okx")
 		args.Amount = amount
 		if buildTx.ToTokenAmount.Div(tokenOutAmountWei).LessThan(decimal.RequireFromString("0.5")) {
 			err = errors.Errorf("minmum receive is too low, minmum receive: %s, amount: %s",
@@ -240,7 +226,6 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		}
 
 		args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusPending).Out())
-		log.Debug("sending tx on chain")
 		txHash, err := args.Sender.SendTransaction(ctx, &types.LegacyTx{
 			To:    &buildTx.Tx.To,
 			Value: buildTx.Tx.Value.BigInt(),
@@ -250,15 +235,14 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 			args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)
 			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "send tx error")
 		}
-		log = log.WithField("tx", txHash)
-		log.Debug("sending tx on chain success")
+		log.Debugf("#%d %s sending tx on chain success", args.OrderId, tokenIn.Name)
 		sh = sh.SetTx(txHash.Hex())
 		sr = sr.SetTx(txHash.Hex()).SetOrderId(txHash.Hex())
 		args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusSuccess).SetTx(txHash.Hex()).Out())
 		tx = txHash.Hex()
 	}
 	args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusPending).Out())
-	log.Debugf("waiting for tx on chain")
+	log.Debugf("#%d %s waiting for tx on chain", args.OrderId, tokenIn.Name)
 	if err := args.Sender.WaitTransaction(ctx, common.HexToHash(tx), client); err != nil {
 		args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusFailed).Out(), err)
 		return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "wait tx error")
@@ -269,12 +253,12 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusFailed).Out(), err)
 		return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "get real hash error")
 	}
-	log.Debug("waiting for tx in okx")
+	log.Debugf("#%d %s waiting for tx in okx", args.OrderId, tokenIn.Name)
 	if err := o.WaitForTx(ctx, realHash, sourceChain.Id); err != nil {
 		args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusFailed).Out(), err)
 		return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), errors.Wrap(err, "wait okx error")
 	}
-	log.Debugf("waiting for tx success in okx")
+	log.Debugf("#%d %s waiting for tx success in okx", args.OrderId, tokenIn.Name)
 	args.RecordFn(sh.SetActions(WaitForTxAction).SetStatus(provider.TxStatusSuccess).SetCurrentChain(targetChain.Name).Out())
 	return sr.SetCurrentChain(args.TargetChain).SetStatus(provider.TxStatusSuccess).Out(), nil
 }

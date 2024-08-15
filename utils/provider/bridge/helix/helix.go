@@ -9,9 +9,9 @@ import (
 	"omni-balance/utils/provider"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
 type Bridge struct {
@@ -30,7 +30,6 @@ func (b *Bridge) Swap(ctx context.Context, args provider.SwapParams) (result pro
 		lastHistory  = args.LastHistory
 		actionNumber = Action2Int(lastHistory.Actions)
 		txHash       = common.HexToHash(lastHistory.Tx)
-		log          = args.GetLogs(b.Name())
 		wallet       = args.Sender
 		recordFn     = func(s provider.SwapHistory, errs ...error) {
 			s.ProviderType = string(b.Type())
@@ -79,12 +78,6 @@ func (b *Bridge) Swap(ctx context.Context, args provider.SwapParams) (result pro
 	isActionSuccess := lastHistory.Status == string(provider.TxStatusSuccess)
 
 	ctx = context.WithValue(ctx, constant.ChainNameKeyInCtx, args.SourceChain)
-	log = args.GetLogs(b.Name()).WithFields(
-		logrus.Fields{
-			"sourceChain": args.SourceChain,
-			"tokenIn":     args.SourceToken,
-		},
-	)
 	chain := b.config.GetChainConfig(args.SourceChain)
 	ethClient, err := chains.NewTryClient(ctx, chain.RpcEndpoints)
 	if err != nil {

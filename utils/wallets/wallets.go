@@ -2,13 +2,13 @@ package wallets
 
 import (
 	"context"
+	"log"
 	"runtime/debug"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
 type MultiSignType string
@@ -57,7 +57,7 @@ func NewWallets(conf WalletConfig) Wallets {
 	wallet := Get(conf.MultiSignType)
 	if wallet == nil {
 		debug.PrintStack()
-		logrus.Fatalf("wallet type '%s' not found", conf.MultiSignType)
+		log.Fatalf("wallet type '%s' not found", conf.MultiSignType)
 	}
 	return wallet(conf)
 }

@@ -18,10 +18,11 @@ import (
 	"sync"
 	"time"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
 	yaml_ncoder "github.com/zwgblue/yaml-encoder"
 )
@@ -82,10 +83,10 @@ func startHttpServer(_ context.Context, port string) error {
 	}
 	utils.Go(func() {
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logrus.Fatalf("http server error: %s", err)
+			log.Fatalf("http server error: %s", err)
 		}
 	})
-	logrus.Infof("http server started on %s", port)
+	log.Infof("http server started on %s", port)
 	return nil
 }
 
@@ -117,7 +118,7 @@ func initConfig(ctx context.Context, enablePlaceholder bool, configPath, serverP
 		if len(ports) < 2 {
 			ports = append([]string{}, "", "8080")
 		}
-		logrus.Infof("waiting for placeholder, you can use `curl -X POST -d '{\"<you_placeholder>\":\"0x1234567890\"}' http://127.0.0.1:%s` to set placeholder", ports[1])
+		log.Infof("waiting for placeholder, you can use `curl -X POST -d '{\"<you_placeholder>\":\"0x1234567890\"}' http://127.0.0.1:%s` to set placeholder", ports[1])
 		configPath, err = waitForPlaceholder(context.Background(), configPath)
 		if err != nil {
 			return err
@@ -139,7 +140,6 @@ func CreateExampleConfig(exampleConfigPath string) error {
 		tasks[v.Name] = v.DefaultInterval
 	}
 	exampleConfig := configs.Config{
-		Debug: true,
 		Chains: []configs.Chain{
 			{
 				Id:   1,
@@ -268,7 +268,7 @@ func CreateExampleConfig(exampleConfigPath string) error {
 	if err := os.WriteFile(exampleConfigPath, exampleConfigData, 0644); err != nil {
 		return errors.Wrap(err, "write example config")
 	}
-	logrus.Infof("Example config file created: %s. In the example configuration file, some values are enclosed in '<>'."+
+	log.Infof("Example config file created: %s. In the example configuration file, some values are enclosed in '<>'."+
 		" You can add the -p parameter at runtime and follow the prompts to replace these values.", exampleConfigPath)
 	return nil
 }

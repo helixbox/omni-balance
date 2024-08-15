@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/patrickmn/go-cache"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"omni-balance/utils"
 	"omni-balance/utils/constant"
 	"sync"
 	"time"
+
+	log "omni-balance/utils/logging"
+
+	"github.com/patrickmn/go-cache"
+	"github.com/pkg/errors"
+	"go.uber.org/zap/zapcore"
 )
 
 var (
@@ -32,12 +35,12 @@ var (
 type Fields map[string]string
 
 type Notice interface {
-	Send(ctx context.Context, title string, content string, level logrus.Level, fields Fields) error
+	Send(ctx context.Context, title string, content string, level zapcore.Level, fields Fields) error
 }
 
 func SetMsgInterval(interval time.Duration) {
 	if interval.Seconds() < time.Hour.Seconds() {
-		logrus.Warnf("msg interval %s is too short, set to 1 hour", interval)
+		log.Infof("msg interval %s is too short, set to 1 hour", interval)
 		msgInterval = time.Hour
 		return
 	}
@@ -69,7 +72,7 @@ func Init(noticeType Type, conf map[string]interface{}, interval time.Duration) 
 	return nil
 }
 
-func Send(ctx context.Context, title string, content string, levels ...logrus.Level) error {
+func Send(ctx context.Context, title string, content string, levels ...zapcore.Level) error {
 	m.Lock()
 	defer m.Unlock()
 	if notice == nil {
@@ -78,11 +81,11 @@ func Send(ctx context.Context, title string, content string, levels ...logrus.Le
 
 	key := utils.Md5(fmt.Sprintf("%s:%s", title, content))
 	if _, ok := msg.Get(key); ok {
-		logrus.Debugf("notice %s:%s already send, 1 hour later will send again", title, content)
+		log.Debugf("notice %s:%s already send, 1 hour later will send again", title, content)
 		return nil
 	}
 	if len(levels) == 0 {
-		levels = append(levels, logrus.InfoLevel)
+		levels = append(levels, zapcore.InfoLevel)
 	}
 	var fields Fields
 	value := ctx.Value(constant.NoticeFieldsKeyInCtx)

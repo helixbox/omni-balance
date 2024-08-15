@@ -14,11 +14,12 @@ import (
 	"omni-balance/utils/wallets"
 	"strings"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // BuildTx The client must is item.ToChain
@@ -129,12 +130,12 @@ func (c Claim) ListNeedWithdrawRecords(ctx context.Context, relayer common.Addre
 	for fromChain, items := range claimRecords {
 		for channel, item := range items {
 			if item.TotalAmount.IsZero() || item.TotalAmount.LessThan(threshold) {
-				logrus.Debugf("amount is less than threshold, token: %s, chain: %s, amount: %s, threshold: %s",
+				log.Debugf("amount is less than threshold, token: %s, chain: %s, amount: %s, threshold: %s",
 					token.Name, toChain, item.TotalAmount.String(), threshold.String(),
 				)
 				continue
 			}
-			logrus.Debugf("amount is greater than threshold, token: %s, chain: %s, amount: %s, threshold: %s",
+			log.Debugf("amount is greater than threshold, token: %s, chain: %s, amount: %s, threshold: %s",
 				token.Name, toChain, item.TotalAmount.String(), threshold.String(),
 			)
 			result = append(result, NeedWithdrawRecords{

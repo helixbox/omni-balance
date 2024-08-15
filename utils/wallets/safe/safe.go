@@ -13,13 +13,15 @@ import (
 	"strings"
 	"time"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
+	"go.uber.org/zap/zapcore"
 )
 
 type Safe struct {
@@ -108,7 +110,6 @@ func (s *Safe) GetBalance(ctx context.Context, tokenAddress common.Address, deci
 }
 
 func (s *Safe) GetNonce(ctx context.Context, client simulated.Client) (uint64, error) {
-	log := utils.GetLogFromCtx(ctx)
 	if s.operatorSafe != nil {
 		nonce, err := s.operatorSafe.nonce(ctx)
 		log.Debugf("operator %s safe nonce: %d", s.conf.Operator.Address.Hex(), nonce)
@@ -123,7 +124,6 @@ func (s *Safe) SendTransaction(ctx context.Context, tx *types.LegacyTx, client s
 
 func (s *Safe) WaitTransaction(ctx context.Context, txHash common.Hash, _ simulated.Client) error {
 	var (
-		log   = utils.GetLogFromCtx(ctx).WithFields(utils.ToMap(s))
 		t     = time.NewTicker(time.Second * 10)
 		count = 0
 	)
@@ -150,7 +150,7 @@ func (s *Safe) WaitTransaction(ctx context.Context, txHash common.Hash, _ simula
 						constant.GetChainName(s.GetChainIdByCtx(ctx)), txHash),
 					fmt.Sprintf("Please go to %s %s safe address to confirm  and execute #%d transaction.",
 						constant.GetChainName(s.GetChainIdByCtx(ctx)), tx.Safe, tx.Nonce),
-					logrus.WarnLevel,
+					zapcore.WarnLevel,
 				); err != nil {
 					log.Debugf("send notice error: %s", err)
 				}

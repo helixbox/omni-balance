@@ -13,13 +13,15 @@ import (
 	"strings"
 	"time"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
+	"go.uber.org/zap/zapcore"
 )
 
 type Dsafe struct {
@@ -112,7 +114,6 @@ func (s *Dsafe) GetBalance(ctx context.Context, tokenAddress common.Address, dec
 }
 
 func (s *Dsafe) GetNonce(ctx context.Context, client simulated.Client) (uint64, error) {
-	log := utils.GetLogFromCtx(ctx)
 	if s.operatorSafe != nil {
 		nonce, err := s.operatorSafe.nonce(ctx)
 		log.Debugf("operator %s safe nonce: %d", s.conf.Operator.Address.Hex(), nonce)
@@ -127,7 +128,6 @@ func (s *Dsafe) SendTransaction(ctx context.Context, tx *types.LegacyTx, client 
 
 func (s *Dsafe) WaitTransaction(ctx context.Context, txHash common.Hash, _ simulated.Client) error {
 	var (
-		log   = utils.GetLogFromCtx(ctx).WithFields(utils.ToMap(s))
 		t     = time.NewTicker(time.Second * 10)
 		count = 0
 	)
@@ -155,7 +155,7 @@ func (s *Dsafe) WaitTransaction(ctx context.Context, txHash common.Hash, _ simul
 						constant.GetChainName(s.GetChainIdByCtx(ctx)), txHash),
 					fmt.Sprintf("Please go to https://dsafe.dcdao.box/transactions/queue?safe=darwinia:%s safe address to confirm  and execute #%d transaction.",
 						tx.SafeAddress, tx.DetailedExecutionInfo.Nonce),
-					logrus.WarnLevel,
+					zapcore.WarnLevel,
 				); err != nil {
 					log.Debugf("send notice error: %s", err)
 				}

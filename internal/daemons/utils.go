@@ -13,13 +13,14 @@ import (
 	"strings"
 	"sync"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/schollz/progressbar/v3"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
-func CreateSwapParams(order models.Order, orderProcess models.OrderProcess, log *logrus.Entry, wallet wallets.Wallets) provider.SwapParams {
+func CreateSwapParams(order models.Order, orderProcess models.OrderProcess, wallet wallets.Wallets) provider.SwapParams {
 	sourceChain := order.CurrentChainName
 	if order.SourceChainName != "" {
 		sourceChain = order.SourceChainName
@@ -35,7 +36,7 @@ func CreateSwapParams(order models.Order, orderProcess models.OrderProcess, log 
 		TargetToken:      order.TokenOutName,
 		Amount:           order.Amount,
 		LastHistory:      createLastHistory(orderProcess),
-		RecordFn:         createRecordFunction(order, log),
+		RecordFn:         createRecordFunction(order),
 		Order:            order.Order,
 		Remark:           order.Remark,
 	}
@@ -51,7 +52,7 @@ func createLastHistory(orderProcess models.OrderProcess) provider.SwapHistory {
 	}
 }
 
-func createRecordFunction(order models.Order, log *logrus.Entry) func(s provider.SwapHistory, errs ...error) {
+func createRecordFunction(order models.Order) func(s provider.SwapHistory, errs ...error) {
 	return func(s provider.SwapHistory, errs ...error) {
 		op := createOrderProcess(order, s)
 		if len(errs) != 0 && errs[0] != nil {
@@ -61,8 +62,13 @@ func createRecordFunction(order models.Order, log *logrus.Entry) func(s provider
 			log.Errorf("save %s bridge provider error: %s", order.TokenOutName, err.Error())
 			return
 		}
-		log.Infof("order #%d action %s status is %s",
-			order.ID, s.Actions, s.Status)
+		if op.Error != "" {
+			log.Errorf("#%d action %s status is %s error: %s",
+				order.ID, s.Actions, s.Status, op.Error)
+		} else {
+			log.Infof("#%d action %s status is %s",
+				order.ID, s.Actions, s.Status)
+		}
 	}
 }
 
@@ -151,10 +157,10 @@ func FindAllChainBalance(_ context.Context, confPath string, needPrintProgress b
 					if err != nil {
 						errorCount++
 						if errorCount > 3 {
-							logrus.Fatalf("get %s balance on %s error: %s", v.tokenName, chainName, err)
+							log.Fatalf("get %s balance on %s error: %s", v.tokenName, chainName, err)
 							return
 						}
-						logrus.Errorf("get %s balance on %s error: %s", v.tokenName, chainName, err)
+						log.Errorf("get %s balance on %s error: %s", v.tokenName, chainName, err)
 						continue
 					}
 					errorCount = 0

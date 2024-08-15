@@ -9,9 +9,10 @@ import (
 	"omni-balance/utils/configs"
 	"sync"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 func Run(ctx context.Context, conf configs.Config) error {
@@ -58,7 +59,7 @@ func Run(ctx context.Context, conf configs.Config) error {
 						defer w.Done()
 						tasks, processType, err := f()
 						if err != nil {
-							logrus.Errorf("bot error: %s", err)
+							log.Errorf("bot error: %s", err)
 							return
 						}
 						if len(tasks) == 0 {
@@ -66,13 +67,13 @@ func Run(ctx context.Context, conf configs.Config) error {
 						}
 						orders, taskId, err := createOrder(ctx, tasks, processType)
 						if err != nil {
-							logrus.Errorf("create order error: %s", err)
+							log.Errorf("create order error: %s", err)
 							return
 						}
 						if len(orders) == 0 {
 							return
 						}
-						logrus.Infof("create %d tasks, based %s on %s using %s bot", len(tasks), tasks[0].TokenOutName,
+						log.Infof("create %d tasks, based %s on %s using %s bot", len(tasks), tasks[0].TokenOutName,
 							tasks[0].TokenOutChainName, botType)
 						market.PushTask(market.Task{
 							Id:          taskId,
