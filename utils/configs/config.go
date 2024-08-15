@@ -385,7 +385,7 @@ func (c *Config) Check() error {
 					}
 				}
 				if !ok {
-					return errors.Errorf("wallets[%d]tokens[%d] token name not in chainsMap", index, tokenIndex)
+					return errors.Errorf("%s wallets[%d]tokens[%d] token name not in chainsMap", token.Name, index, tokenIndex)
 				}
 			}
 		}

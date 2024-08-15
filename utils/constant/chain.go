@@ -34,6 +34,7 @@ const (
 	Celo            = "celo"
 	Moonbeam        = "moonbeam"
 	ArbitrumSepolia = "arbitrum-sepolia"
+	Zircuit         = "zircuit"
 )
 
 const (
@@ -76,6 +77,7 @@ var (
 		OpBNB:           204,
 		Bnb:             56,
 		Celo:            42220,
+		Zircuit:         48900,
 	}
 	chainId2Name = make(map[int]string)
 )
