@@ -19,7 +19,9 @@ import (
 	log "omni-balance/utils/logging"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/jinzhu/copier"
 	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -232,6 +234,7 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 	if err != nil {
 		return errors.Wrap(err, "generate order by wallet mode error")
 	}
+
 	providerObj, err := getBestProvider(ctx, order, conf)
 	if err != nil {
 		return errors.Wrap(err, "get  provider error")
@@ -243,6 +246,7 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 
 	log.Infof("start rebalance %s on %s use %s provider", order.TokenOutName, order.TargetChainName, providerObj.Name())
 	args.SourceChainNames = order.TokenInChainNames
+	args.SourceToken = order.TokenInName
 	result, providerErr := providerObj.Swap(ctx, args)
 	if errors.Is(providerErr, context.Canceled) {
 		return nil
@@ -277,7 +281,8 @@ func generateOrderByWalletMode(ctx context.Context, order models.Order, conf con
 	if order.TokenInName != "" {
 		return order, nil
 	}
-	if conf.GetWalletConfig(order.Wallet).Mode != "balance" {
+	if conf.GetWalletConfig(order.Wallet).Mode != "balance" ||
+		(order.TokenInName != "" && order.SourceChainName != "") {
 		return order, nil
 	}
 	token := conf.GetWalletTokenInfo(order.Wallet, order.TokenOutName)
@@ -288,19 +293,39 @@ func generateOrderByWalletMode(ctx context.Context, order models.Order, conf con
 		if err != nil {
 			return order, errors.Wrap(err, "new evm client error")
 		}
-		tokenInfo := conf.GetTokenInfoOnChain(token.Name, v)
-		balance, err := chains.GetTokenBalance(ctx, client, tokenInfo.ContractAddress, order.Wallet, tokenInfo.Decimals)
-		if err != nil {
-			return order, errors.Wrap(err, "get token balance error")
+		bots := conf.ListBotNames(order.Wallet, v, token.Name)
+		if len(bots) == 0 {
+			bots = append(bots, "balance_on_chain")
 		}
-		if balance.Sub(order.Amount).LessThan(threshold) {
+		var total = decimal.Zero
+		for _, botType := range bots {
+			balance, err := bot.GetBot(botType).Balance(ctx, bot.Params{
+				Conf: conf,
+				Info: bot.Config{
+					Wallet:    conf.GetWallet(order.Wallet),
+					TokenName: token.Name,
+					Chain:     v,
+				},
+				Client: client,
+			})
+			if err != nil {
+				return order, errors.Wrap(err, "get bot balance error")
+			}
+			total = total.Add(balance)
+		}
+		if total.Sub(order.Amount).LessThan(threshold) {
 			continue
 		}
+		log.Debugf("wallet %s token %s on chain %s balance is %s, amount is %s, balance - amount >= threshold, can rebalance from this chain", order.Wallet, token.Name, v, total, order.Amount)
 		sourceChains = append(sourceChains, v)
 	}
 	if len(sourceChains) != 0 {
-		order.TokenInName = token.Name
-		order.TokenInChainNames = sourceChains
+		newOrder := new(models.Order)
+		_ = copier.Copy(newOrder, order)
+		newOrder.TokenInName = token.Name
+		newOrder.TokenInChainNames = sourceChains
+		order = *newOrder
+		log.Debugf("order mode is 'balance', use %s on %+v as token in, token out is %s on %s", order.TokenInName, order.TokenInChainNames, order.TokenOutName, order.TargetChainName)
 	}
 	return order, nil
 }

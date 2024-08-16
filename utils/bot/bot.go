@@ -2,11 +2,12 @@ package bot
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/ethclient/simulated"
-	"github.com/shopspring/decimal"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/provider"
 	"omni-balance/utils/wallets"
+
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/shopspring/decimal"
 )
 
 type ProcessType string
@@ -28,6 +29,7 @@ type Params struct {
 
 type Bot interface {
 	Check(ctx context.Context, args Params) ([]Task, ProcessType, error)
+	Balance(ctx context.Context, args Params) (decimal.Decimal, error)
 	Name() string
 }
 

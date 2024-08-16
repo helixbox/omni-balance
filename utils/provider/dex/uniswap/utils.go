@@ -12,10 +12,11 @@ import (
 	uniswapUtils "omni-balance/utils/provider/dex/uniswap/utils"
 	"omni-balance/utils/wallets"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
-	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
 )

@@ -145,15 +145,17 @@ func Request(ctx context.Context, method string, url string, body io.Reader, des
 		req.Header.Set("accept", "application/json")
 	}
 	req = req.WithContext(ctx)
-	var count int
+	var (
+		count int
+		resp  *http.Response
+	)
 	for count < 3 {
 		count++
-		resp, err := new(http.Client).Do(req)
+		resp, err = new(http.Client).Do(req)
 		if errors.Is(err, context.Canceled) {
 			return context.Canceled
 		}
 		if err != nil {
-			log.Debugf("request failed: %s", err)
 			time.Sleep(time.Second)
 			continue
 		}
@@ -174,7 +176,49 @@ func Request(ctx context.Context, method string, url string, body io.Reader, des
 		}
 		return nil
 	}
-	return errors.New("request failed")
+	return errors.Wrap(err, "request failed")
+}
+
+func RequestBinary(ctx context.Context, method string, url string, body io.Reader, headers ...string) ([]byte, error) {
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, errors.Wrap(err, "new request")
+	}
+	for i := 0; i < len(headers); i += 2 {
+		req.Header.Set(headers[i], headers[i+1])
+	}
+	if body != nil && req.Header.Get("content-type") == "" {
+		req.Header.Set("content-type", "application/json")
+	}
+	if req.Header.Get("accept") == "" {
+		req.Header.Set("accept", "application/json")
+	}
+	req = req.WithContext(ctx)
+	var (
+		count int
+		resp  *http.Response
+	)
+	for count < 3 {
+		count++
+		resp, err = new(http.Client).Do(req)
+		if errors.Is(err, context.Canceled) {
+			return nil, context.Canceled
+		}
+		if err != nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Debugf("read response failed: %s", err)
+			_ = resp.Body.Close()
+			time.Sleep(time.Second)
+			continue
+		}
+		_ = resp.Body.Close()
+		return data, nil
+	}
+	return nil, errors.Wrap(err, "request failed")
 }
 
 func String(s string) *string {

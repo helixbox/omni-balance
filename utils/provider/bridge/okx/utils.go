@@ -85,61 +85,88 @@ func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams)
 	var (
 		tokenOut = o.conf.GetTokenInfoOnChain(args.TargetToken, args.TargetChain)
 	)
-	getQuote := func(chainName, tokenName string) error {
+	getQuote := func(chainName, tokenName string) {
 		sourceToken := o.conf.GetTokenInfoOnChain(tokenName, chainName)
 		chain := o.conf.GetChainConfig(chainName)
 		tokenIn := o.conf.GetTokenInfoOnChain(sourceToken.Name, chainName)
 		if tokenIn.ContractAddress == "" {
-			return errors.Errorf("token %s on chain %s is not supported", sourceToken.Name, chainName)
+			log.Debugf("token in contract address is empty, chain: %s, token: %s", chainName, tokenName)
+			return
 		}
 		client, err := chains.NewTryClient(ctx, chain.RpcEndpoints)
 		if err != nil {
 			log.Debugf("new client error: '%s' with %+v", err, chain.RpcEndpoints)
-			return err
+			return
 		}
-
-		tokenInTestBalance := decimal.RequireFromString("1")
-		tokenInTestBalanceWei := decimal.NewFromBigInt(chains.EthToWei(tokenInTestBalance, tokenIn.Decimals), 0)
-		quote, err := o.Quote(ctx, QuoteParams{
-			Amount:           tokenInTestBalanceWei,
-			FormChainId:      chain.Id,
-			ToChainId:        constant.GetChainId(args.TargetChain),
-			ToTokenAddress:   common.HexToAddress(tokenOut.ContractAddress),
-			FromTokenAddress: common.HexToAddress(tokenIn.ContractAddress),
-		})
-		if err != nil {
-			return errors.Wrap(err, "get quote")
-		}
-		if len(quote.RouterList) == 0 {
-			return errors.Errorf("no router list")
-		}
-
-		minimumReceived := chains.WeiToEth(quote.RouterList[0].MinimumReceived.BigInt(), tokenOut.Decimals)
-		needBalance := tokenInTestBalance.Div(minimumReceived).Mul(args.Amount)
-
+		defer client.Close()
 		balance, err := chains.GetTokenBalance(ctx, client, tokenIn.ContractAddress,
 			args.Sender.GetAddress(true).Hex(), tokenIn.Decimals)
 		if err != nil {
-			return err
+			log.Warnf("get %s on %s balance error: %s", tokenName, chainName, err)
+			return
 		}
-		if needBalance.GreaterThan(balance) {
-			return errors.Errorf("wallet balance is not enough")
+		if balance.LessThanOrEqual(decimal.Zero) {
+			log.Debugf("%s %s on %s balance is 0, skip it.", args.Sender.GetAddress(true).Hex(), tokenName, chainName)
+			return
+		}
+
+		quote, err := o.Quote(ctx, QuoteParams{
+			Amount:           decimal.NewFromBigInt(chains.EthToWei(args.Amount, tokenOut.Decimals), 0),
+			FormChainId:      constant.GetChainId(args.TargetChain),
+			ToChainId:        chain.Id,
+			ToTokenAddress:   common.HexToAddress(tokenIn.ContractAddress),
+			FromTokenAddress: common.HexToAddress(tokenOut.ContractAddress),
+		})
+		if err != nil {
+			log.Warnf("get %s on %s to %s on %s quote error: %s", tokenName, chainName, tokenOut.Name, args.TargetChain, err)
+			return
+		}
+		if len(quote.RouterList) == 0 {
+			log.Warnf("%s on %s to %s on %s no router list", tokenName, chainName, tokenOut.Name, args.TargetChain)
+			return
+		}
+
+		needTokenInAmount := chains.WeiToEth(quote.RouterList[0].ToTokenAmount.BigInt(), tokenIn.Decimals)
+		log.Debugf("get quote, need %s %s on %s to get %s %s on %s",
+			needTokenInAmount, tokenName, chainName, args.Amount, tokenOut.Name, args.TargetChain)
+		// 2% slippage
+		needTokenInAmount = needTokenInAmount.Add(needTokenInAmount.Mul(decimal.RequireFromString("0.02")))
+
+		if needTokenInAmount.GreaterThan(balance) {
+			log.Debugf("%s need %s on %s balance is greater than balance, need: %s, balance: %s",
+				args.Sender.GetAddress(true).Hex(), tokenName, chainName, needTokenInAmount.String(), balance.String())
+			return
 		}
 		if tokenInAmount.Equal(decimal.Zero) {
-			tokenInAmount = needBalance
+			tokenInAmount = needTokenInAmount
 		}
-		if tokenInAmount.GreaterThan(needBalance) {
-			return errors.Errorf("need balance is greater than balance")
+		if tokenInAmount.GreaterThan(needTokenInAmount) {
+			return
 		}
-		tokenInAmount = needBalance
+		tokenInAmount = needTokenInAmount
 		tokenInName = sourceToken.Name
 		tokenInChainName = chainName
-		return nil
+		log.Debugf("get best token in chain, token: %s on %s, tokenInAmount: %s", tokenName, chainName, tokenInAmount.String())
+
 	}
 	if args.SourceChain != "" && args.SourceToken != "" {
-		if err := getQuote(args.SourceChain, args.SourceToken); err != nil {
-			return "", "", tokenInAmount, err
+		getQuote(args.SourceChain, args.SourceToken)
+		if tokenInChainName == "" || tokenInName == "" || tokenInAmount.IsZero() {
+			return "", "", tokenInAmount, error_types.ErrUnsupportedTokenAndChain
 		}
+		log.Debugf("#%d get best route for %s %s is use %s %s token from %s chain by specify source chain and token", args.OrderId, args.TargetChain, args.TargetToken, tokenInAmount, tokenInName, tokenInChainName)
+		return
+	}
+
+	if args.SourceToken != "" && len(args.SourceChainNames) > 0 && args.SourceChain == "" {
+		for _, v := range args.SourceChainNames {
+			getQuote(v, args.SourceToken)
+		}
+		if tokenInChainName == "" || tokenInName == "" || tokenInAmount.IsZero() {
+			return "", "", tokenInAmount, error_types.ErrUnsupportedTokenAndChain
+		}
+		log.Debugf("#%d best route for %s %s is use %s %s token from %s chain by specify source chains and token", args.OrderId, args.TargetChain, args.TargetToken, tokenInAmount, tokenInName, tokenInChainName)
+		return
 	}
 
 	for _, sourceToken := range o.conf.SourceTokens {
@@ -147,15 +174,10 @@ func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams)
 			continue
 		}
 		for _, v := range sourceToken.Chains {
-			if strings.EqualFold(v, args.TargetChain) && sourceToken.Name == args.TargetToken {
+			if args.SourceChain != "" && v != args.SourceChain {
 				continue
 			}
-			if len(args.SourceChainNames) > 0 && !utils.InArrayFold(v, args.SourceChainNames) {
-				continue
-			}
-			if err := getQuote(v, sourceToken.Name); err != nil {
-				continue
-			}
+			getQuote(v, sourceToken.Name)
 		}
 	}
 	if tokenInChainName == "" || tokenInName == "" || tokenInAmount.IsZero() {
@@ -202,7 +224,7 @@ func (o *OKX) buildTx(ctx context.Context, args provider.SwapParams) (BuildTxDat
 	params.Set("slippage", "0.01")
 	params.Set("sort", "1")
 	params.Set("userWalletAddress", args.Sender.GetAddress(true).Hex())
-	if args.Receiver != "" && !strings.EqualFold(args.Receiver, args.Sender.GetAddress(true).Hex()) {
+	if args.Receiver != "" && !strings.EqualFold(args.Receiver, args.Sender.GetAddress().Hex()) {
 		params.Set("receiveAddress", args.Receiver)
 	}
 	var tx OksResp

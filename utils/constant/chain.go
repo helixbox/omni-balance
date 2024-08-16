@@ -75,7 +75,6 @@ var (
 		Rootstock:       30,
 		Astar:           592,
 		OpBNB:           204,
-		Bnb:             56,
 		Celo:            42220,
 		Zircuit:         48900,
 	}

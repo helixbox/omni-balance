@@ -7,11 +7,11 @@ import (
 	"omni-balance/internal/models"
 	"omni-balance/utils"
 	"omni-balance/utils/configs"
+	log "omni-balance/utils/logging"
 	"omni-balance/utils/token_price"
 	"sync"
 	"time"
 
-	"github.com/labstack/gommon/log"
 	"github.com/shopspring/decimal"
 )
 
@@ -39,6 +39,7 @@ func Run(ctx context.Context, conf configs.Config) error {
 			defer w.Done()
 			result, err := provider.GetTokenPriceInUSDT(ctx, conf.SourceTokens...)
 			if err != nil {
+
 				log.Warnf("%s get token price error: %s", provider.Name(), err)
 				return
 			}

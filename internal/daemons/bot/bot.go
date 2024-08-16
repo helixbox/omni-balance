@@ -48,11 +48,10 @@ func Run(ctx context.Context, conf configs.Config) error {
 					continue
 				}
 				var botTypes = conf.ListBotNames(wallet.Address, chainName, token.Name)
-
 				if len(botTypes) == 0 {
 					botTypes = append(botTypes, "balance_on_chain")
 				}
-
+				log.Debugf("wallet %s token %s on chain %s has %+v bots to execute", wallet.Address, token.Name, chainName, botTypes)
 				for _, botType := range botTypes {
 					w.Add(1)
 					go func(f func() ([]bot.Task, bot.ProcessType, error), botType string) {

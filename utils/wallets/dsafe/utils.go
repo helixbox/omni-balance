@@ -223,16 +223,16 @@ func (s *Dsafe) MultisigTransaction(ctx context.Context, tx *types.LegacyTx, cli
 		return s.Transfer(ctx, tx, client)
 	}
 
-	_, err = client.EstimateGas(ctx, ethereum.CallMsg{
-		From:  s.GetAddress(),
-		To:    tx.To,
-		Value: tx.Value,
-		Data:  tx.Data,
-	})
-	if err != nil {
-		log.Debugf("estimate gas error: %s", err.Error())
-		return common.Hash{}, errors.Wrap(err, "estimate gas error")
-	}
+	// _, err = client.EstimateGas(ctx, ethereum.CallMsg{
+	// 	From:  s.GetAddress(),
+	// 	To:    tx.To,
+	// 	Value: tx.Value,
+	// 	Data:  tx.Data,
+	// })
+	// if err != nil {
+	// 	log.Debugf("estimate gas error: %s", err.Error())
+	// 	return common.Hash{}, errors.Wrap(err, "estimate gas error")
+	// }
 
 	info, err := s.safeWalletInfo(ctx)
 	if err != nil {

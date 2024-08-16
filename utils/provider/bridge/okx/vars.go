@@ -203,7 +203,7 @@ type QuoteData struct {
 				} `json:"toToken"`
 			} `json:"subRouterList"`
 		} `json:"toDexRouterList"`
-		ToTokenAmount string `json:"toTokenAmount"`
+		ToTokenAmount decimal.Decimal `json:"toTokenAmount"`
 	} `json:"routerList"`
 }
 

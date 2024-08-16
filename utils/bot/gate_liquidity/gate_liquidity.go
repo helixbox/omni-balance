@@ -6,6 +6,7 @@ import (
 	"omni-balance/utils/bot/balance_on_chain"
 	"omni-balance/utils/configs"
 
+	"github.com/shopspring/decimal"
 	"github.com/spf13/cast"
 )
 
@@ -19,6 +20,10 @@ type GateLiquidity struct {
 
 func (g GateLiquidity) Name() string {
 	return "gate_liquidity"
+}
+
+func (b GateLiquidity) Balance(ctx context.Context, args bot.Params) (decimal.Decimal, error) {
+	return balance_on_chain.BalanceOnChain{}.Balance(ctx, args)
 }
 
 func (b GateLiquidity) Check(ctx context.Context, args bot.Params) ([]bot.Task, bot.ProcessType, error) {

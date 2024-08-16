@@ -23,14 +23,18 @@ func (b BalanceOnChain) Name() string {
 	return "balance_on_chain"
 }
 
+func (b BalanceOnChain) Balance(ctx context.Context, args bot.Params) (decimal.Decimal, error) {
+	token := args.Conf.GetTokenInfoOnChain(args.Info.TokenName, args.Info.Chain)
+	return args.Info.Wallet.GetExternalBalance(ctx, common.HexToAddress(token.ContractAddress), token.Decimals, args.Client)
+}
+
 func (b BalanceOnChain) Check(ctx context.Context, args bot.Params) ([]bot.Task, bot.ProcessType, error) {
 	var (
 		config = args.Conf
 		info   = args.Info
 		tasks  []bot.Task
 	)
-	token := config.GetTokenInfoOnChain(info.TokenName, args.Info.Chain)
-	balance, err := info.Wallet.GetExternalBalance(ctx, common.HexToAddress(token.ContractAddress), token.Decimals, args.Client)
+	balance, err := b.Balance(ctx, args)
 	if err != nil {
 		return nil, "", errors.Wrap(err, "get balance error")
 	}

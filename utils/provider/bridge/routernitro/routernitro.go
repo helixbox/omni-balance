@@ -10,11 +10,13 @@ import (
 	"omni-balance/utils/provider"
 	"strings"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
+	"github.com/tidwall/gjson"
 )
 
 func init() {
@@ -87,33 +89,37 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 		actionNumber      = Action2Int(history.Actions)
 		isActionSuccess   = history.Status == provider.TxStatusSuccess.String()
 		sourceChain       configs.Chain
-		quote             Quote
+		quote             gjson.Result
 	)
 
-	args.SourceToken, args.SourceChain, costAmount, quote, err = r.GetBestQuote(ctx, args)
+	args.SourceToken, args.SourceChain, costAmount, _, err = r.GetBestQuote(ctx, args)
+	if err != nil {
+		return provider.SwapResult{}, err
+	}
+	if args.SourceChain == "" || args.SourceToken == "" {
+		log.Fatalf("#%d %s source chain and token is required", args.OrderId, args.TargetToken)
+	}
+	tokenIn = r.conf.GetTokenInfoOnChain(args.SourceToken, args.SourceChain)
+	sourceChain = r.conf.GetChainConfig(args.SourceChain)
+	tokenInAmount = costAmount
+	tokenInAmountWei = decimal.NewFromBigInt(chains.EthToWei(tokenInAmount, tokenIn.Decimals), 0)
+	isTokenInNative := r.conf.IsNativeToken(sourceChain.Name, tokenIn.Name)
+
+	quote, err = r.Quote(ctx, QuoteParams{
+		FromTokenAddress: common.HexToAddress(tokenIn.ContractAddress),
+		ToTokenAddress:   common.HexToAddress(tokenOut.ContractAddress),
+		AmountWei:        decimal.NewFromBigInt(chains.EthToWei(costAmount, tokenIn.Decimals), 0),
+		FromTokenChainId: sourceChain.Id,
+		ToTokenChainId:   constant.GetChainId(args.TargetChain),
+	})
 	if err != nil {
 		return provider.SwapResult{}, err
 	}
 
-	if quote.Destination.TokenAmount.IsZero() {
+	if quote.Get("destination").Get("tokenAmount").String() == "" {
 		return provider.SwapResult{}, errors.New("token out amount is zero")
 	}
-
-	if args.SourceChain == "" || args.SourceToken == "" {
-		log.Fatalf("#%d %s source chain and token is required", args.OrderId, args.TargetToken)
-	}
-
-	tokenIn = r.conf.GetTokenInfoOnChain(args.SourceToken, args.SourceChain)
-
-	if args.SourceToken != args.TargetToken {
-		tokenInAmount = costAmount
-		tokenInAmountWei = decimal.NewFromBigInt(chains.EthToWei(tokenInAmount, tokenIn.Decimals), 0)
-	} else {
-		tokenInAmount = tokenOutAmount
-		tokenInAmountWei = decimal.NewFromBigInt(chains.EthToWei(tokenInAmount, tokenIn.Decimals), 0)
-	}
-	sourceChain = r.conf.GetChainConfig(args.SourceChain)
-	isTokenInNative := r.conf.IsNativeToken(sourceChain.Name, tokenIn.Name)
+	tokenOutAmount = decimal.RequireFromString(quote.Get("destination").Get("tokenAmount").String())
 
 	if tokenOutAmount.LessThanOrEqual(decimal.Zero) {
 		return provider.SwapResult{}, errors.New("token out amount is zero")
@@ -165,10 +171,11 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 				Owner:           args.Sender.GetAddress(true),
 				SendTransaction: args.Sender.SendTransaction,
 				WaitTransaction: args.Sender.WaitTransaction,
-				Spender:         common.HexToAddress(quote.AllowanceTo),
+				Spender:         common.HexToAddress(quote.Get("allowanceTo").String()),
 				// for save next gas, multiply 2
-				AmountWei: tokenInAmountWei.Mul(decimal.RequireFromString("2")),
-				Client:    client,
+				AmountWei:   tokenInAmountWei.Mul(decimal.RequireFromString("2")),
+				IsNotWaitTx: r.conf.GetWalletConfig(string(args.Sender.GetAddress().Hex())).MultiSignType != "",
+				Client:      client,
 			})
 		if err != nil {
 			args.RecordFn(sh.SetActions(ApproveTransactionAction).SetStatus(provider.TxStatusFailed).Out(), err)
@@ -178,7 +185,7 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 		args.RecordFn(sh.SetActions(ApproveTransactionAction).SetStatus(provider.TxStatusSuccess).Out())
 	}
 
-	if !isActionSuccess && actionNumber <= 2 {
+	if actionNumber <= 2 && (!isActionSuccess || actionNumber == 1) {
 		amount := args.Amount.Copy()
 		args.Amount = tokenInAmount
 		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{

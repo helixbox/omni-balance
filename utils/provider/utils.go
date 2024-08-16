@@ -9,9 +9,10 @@ import (
 	"omni-balance/utils/constant"
 	"omni-balance/utils/notice"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
-	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
 )

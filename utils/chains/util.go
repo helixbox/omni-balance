@@ -149,6 +149,7 @@ type TokenApproveParams struct {
 	WaitTransaction func(ctx context.Context, txHash common.Hash, client simulated.Client) error
 	Spender         common.Address
 	AmountWei       decimal.Decimal
+	IsNotWaitTx     bool
 	Client          simulated.Client
 }
 
@@ -179,6 +180,10 @@ func TokenApprove(ctx context.Context, args TokenApproveParams) error {
 	}, args.Client)
 	if err != nil {
 		return errors.Wrap(err, "erc20 approve")
+	}
+
+	if args.IsNotWaitTx {
+		return nil
 	}
 	if args.WaitTransaction != nil {
 		return args.WaitTransaction(ctx, txHash, args.Client)

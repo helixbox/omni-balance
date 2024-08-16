@@ -160,7 +160,6 @@ func FindAllChainBalance(_ context.Context, confPath string, needPrintProgress b
 							log.Fatalf("get %s balance on %s error: %s", v.tokenName, chainName, err)
 							return
 						}
-						log.Errorf("get %s balance on %s error: %s", v.tokenName, chainName, err)
 						continue
 					}
 					errorCount = 0

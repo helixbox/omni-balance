@@ -10,9 +10,10 @@ import (
 	"omni-balance/utils/provider"
 	"strings"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
 )
@@ -44,6 +45,7 @@ func (o *OKX) GetCost(ctx context.Context, args provider.SwapParams) (provider.T
 		err        error
 		costAmount decimal.Decimal
 	)
+
 	if args.SourceChain == "" || args.SourceToken == "" {
 		args.SourceToken, args.SourceChain, costAmount, err = o.GetBestTokenInChain(ctx, args)
 		if err != nil {
@@ -108,14 +110,8 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 	}
 
 	tokenIn = o.conf.GetTokenInfoOnChain(args.SourceToken, args.SourceChain)
-
-	if args.SourceToken != args.TargetToken {
-		tokenInAmount = costAmount
-		tokenInAmountWei = decimal.NewFromBigInt(chains.EthToWei(tokenInAmount, tokenIn.Decimals), 0)
-	} else {
-		tokenInAmount = tokenOutAmount
-		tokenInAmountWei = decimal.NewFromBigInt(chains.EthToWei(tokenInAmount, tokenIn.Decimals), 0)
-	}
+	tokenInAmount = costAmount
+	tokenInAmountWei = decimal.NewFromBigInt(chains.EthToWei(tokenInAmount, tokenIn.Decimals), 0)
 	sourceChain = o.conf.GetChainConfig(args.SourceChain)
 	isTokenInNative := o.conf.IsNativeToken(sourceChain.Name, tokenIn.Name)
 
@@ -175,8 +171,9 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 			WaitTransaction: args.Sender.WaitTransaction,
 			Spender:         common.HexToAddress(approveTransaction.DexContractAddress),
 			// for save next gas, multiply 2
-			AmountWei: tokenInAmountWei.Mul(decimal.RequireFromString("2")),
-			Client:    client,
+			AmountWei:   tokenInAmountWei.Mul(decimal.RequireFromString("2")),
+			IsNotWaitTx: o.conf.GetWalletConfig(string(args.Sender.GetAddress().Hex())).MultiSignType != "",
+			Client:      client,
 		})
 		if err != nil {
 			args.RecordFn(sh.SetActions(ApproveTransactionAction).SetStatus(provider.TxStatusFailed).Out(), err)
@@ -186,7 +183,7 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		args.RecordFn(sh.SetActions(ApproveTransactionAction).SetStatus(provider.TxStatusSuccess).Out())
 	}
 
-	if !isActionSuccess && actionNumber <= 2 {
+	if actionNumber <= 2 && (!isActionSuccess || actionNumber == 1) {
 		amount := args.Amount.Copy()
 		args.Amount = tokenInAmount
 		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
@@ -210,10 +207,6 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		if buildTx.ToTokenAmount.Div(tokenOutAmountWei).LessThan(decimal.RequireFromString("0.5")) {
 			err = errors.Errorf("minmum receive is too low, minmum receive: %s, amount: %s",
 				buildTx.ToTokenAmount, tokenOutAmountWei)
-			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
-		}
-		if !isTokenInNative && !buildTx.Tx.Value.IsZero() {
-			err = errors.Errorf("tokenin is not native token, but value is not zero")
 			return sr.SetError(err).SetStatus(provider.TxStatusFailed).Out(), err
 		}
 		if isTokenInNative && buildTx.Tx.Value.IsZero() {

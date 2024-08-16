@@ -18,6 +18,8 @@ import (
 	"sync"
 	"time"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -26,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
-	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
 	"github.com/spf13/cast"
@@ -163,16 +164,16 @@ func (s *Safe) MultisigTransaction(ctx context.Context, tx *types.LegacyTx, clie
 		return s.Transfer(ctx, tx, client)
 	}
 
-	_, err = client.EstimateGas(ctx, ethereum.CallMsg{
-		From:  s.GetAddress(),
-		To:    tx.To,
-		Value: tx.Value,
-		Data:  tx.Data,
-	})
-	if err != nil && !strings.Contains(err.Error(), "insufficient funds for gas * price + value") {
-		log.Debugf("estimate gas error: %s", err.Error())
-		return common.Hash{}, errors.Wrap(err, "estimate gas error")
-	}
+	// _, err = client.EstimateGas(ctx, ethereum.CallMsg{
+	// 	From:  s.GetAddress(),
+	// 	To:    tx.To,
+	// 	Value: tx.Value,
+	// 	Data:  tx.Data,
+	// })
+	// if err != nil && !strings.Contains(err.Error(), "insufficient funds for gas * price + value") {
+	// 	log.Debugf("estimate gas error: %s", err.Error())
+	// 	return common.Hash{}, errors.Wrap(err, "estimate gas error")
+	// }
 
 	info, err := s.safeWalletInfo(ctx)
 	if err != nil {

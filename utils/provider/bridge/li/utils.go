@@ -9,7 +9,6 @@ import (
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/provider"
 	"strconv"
-	"strings"
 	"time"
 
 	log "omni-balance/utils/logging"
@@ -51,68 +50,87 @@ func (l Li) GetBestQuote(ctx context.Context, args provider.SwapParams) (tokenIn
 		tokenOut = l.conf.GetTokenInfoOnChain(args.TargetToken, args.TargetChain)
 	)
 
-	getQuote := func(chainName, token string) error {
-		sourceToken := l.conf.GetTokenInfoOnChain(token, chainName)
+	getQuote := func(chainName, tokenName string) {
+		sourceToken := l.conf.GetTokenInfoOnChain(tokenName, chainName)
 		chain := l.conf.GetChainConfig(chainName)
 		tokenIn := l.conf.GetTokenInfoOnChain(sourceToken.Name, chainName)
 		if tokenIn.ContractAddress == "" {
-			return errors.New("tokenIn contract address is empty")
+			log.Warnf("tokenIn contract address is empty on %s", chainName)
+			return
 		}
 		client, err := chains.NewTryClient(ctx, chain.RpcEndpoints)
 		if err != nil {
 			log.Warnf("get chain %s client error: %s", chain.Name, err)
-			return err
+			return
 		}
-
-		tokenInTestBalance := decimal.RequireFromString("1")
-		tokenInTestBalanceWei := decimal.NewFromBigInt(chains.EthToWei(tokenInTestBalance, tokenIn.Decimals), 0)
-
+		defer client.Close()
+		balance, err := chains.GetTokenBalance(ctx, client, tokenIn.ContractAddress,
+			args.Sender.GetAddress(true).Hex(), tokenIn.Decimals)
+		if err != nil {
+			log.Warnf("get %s on %s balance error: %s", tokenName, chainName, err)
+			return
+		}
+		if balance.LessThanOrEqual(decimal.Zero) {
+			log.Debugf("%s on %s balance is 0", tokenName, chainName)
+			return
+		}
 		quoteData, err := l.Quote(ctx, QuoteParams{
-			FromChainId:   chain.Id,
-			ToChainId:     constant.GetChainId(args.TargetChain),
-			FromToken:     common.HexToAddress(tokenIn.ContractAddress),
-			ToToken:       common.HexToAddress(tokenOut.ContractAddress),
-			FromAmountWei: tokenInTestBalanceWei,
+			FromChainId:   constant.GetChainId(args.TargetChain),
+			ToChainId:     chain.Id,
+			FromToken:     common.HexToAddress(tokenOut.ContractAddress),
+			ToToken:       common.HexToAddress(tokenIn.ContractAddress),
+			FromAmountWei: decimal.NewFromBigInt(chains.EthToWei(args.Amount, tokenOut.Decimals), 0),
 			FromAddress:   args.Sender.GetAddress(true),
 			ToAddress:     common.HexToAddress(args.Receiver),
 		})
 		if err != nil {
-			log.Debugf("get quote error: %s", err)
-			return errors.Wrap(err, "get quote")
+			log.Debugf("get tokenin %s on %s quote error: %s", tokenName, chainName, err)
+			return
 		}
 
-		minimumReceived := chains.WeiToEth(quoteData.Estimate.ToAmountMin.BigInt(), tokenOut.Decimals)
-		needBalance := tokenInTestBalance.Div(minimumReceived).Mul(args.Amount)
+		needTokenInAmount := chains.WeiToEth(quoteData.Estimate.ToAmount.BigInt(), tokenIn.Decimals)
 
-		balance, err := chains.GetTokenBalance(ctx, client, tokenIn.ContractAddress,
-			args.Sender.GetAddress(true).Hex(), tokenIn.Decimals)
-		if err != nil {
-			log.Debugf("get balance error: %s", err)
-			return errors.Wrap(err, "get balance")
-		}
+		log.Debugf("get quote, need %s %s on %s to get %s %s on %s",
+			needTokenInAmount, tokenName, chainName, args.Amount, tokenOut.Name, args.TargetChain)
+		// 2% slippage
+		needTokenInAmount = needTokenInAmount.Add(needTokenInAmount.Mul(decimal.RequireFromString("0.02")))
 
-		log.Debugf("need %s balance: %s, wallet %s balance: %s on %s",
-			tokenIn.Name, needBalance, tokenIn.Name, balance, chainName)
-		if needBalance.GreaterThan(balance) {
-			log.Debugf("%s need balance: %s, balance: %s", tokenIn.Name, needBalance, balance)
-			return errors.New("not enough balance")
+		if needTokenInAmount.GreaterThan(balance) {
+			log.Debugf("%s need %s on %s balance is greater than balance, need: %s, balance: %s",
+				args.Sender.GetAddress(true).Hex(), tokenName, chainName, needTokenInAmount.String(), balance.String())
+			return
 		}
 		if tokenInAmount.Equal(decimal.Zero) {
-			tokenInAmount = needBalance
+			tokenInAmount = needTokenInAmount
 		}
-		if tokenInAmount.GreaterThan(needBalance) {
-			log.Debugf("need balance: %s, balance: %s", needBalance, balance)
-			return errors.New("not enough balance")
+		if tokenInAmount.GreaterThan(needTokenInAmount) {
+			return
 		}
-		tokenInAmount = needBalance
+
+		tokenInAmount = needTokenInAmount
 		tokenInName = sourceToken.Name
 		tokenInChainName = chainName
 		quote = quoteData
-		return nil
+		log.Debugf("get best token in chain, token: %s on %s, tokenInAmount: %s", tokenName, chainName, tokenInAmount.String())
 	}
 
 	if args.SourceChain != "" && args.SourceToken != "" {
-		err = getQuote(args.SourceChain, args.SourceToken)
+		getQuote(args.SourceChain, args.SourceToken)
+		if tokenInChainName == "" || tokenInName == "" || tokenInAmount.IsZero() {
+			return "", "", tokenInAmount, Quote{}, error_types.ErrUnsupportedTokenAndChain
+		}
+		log.Debugf("#%d get best route for %s %s is use %s %s token from %s chain by specify source chain and token", args.OrderId, args.TargetChain, args.TargetToken, tokenInAmount, tokenInName, tokenInChainName)
+		return
+	}
+
+	if args.SourceToken != "" && len(args.SourceChainNames) > 0 && args.SourceChain == "" {
+		for _, v := range args.SourceChainNames {
+			getQuote(v, args.SourceToken)
+		}
+		if tokenInChainName == "" || tokenInName == "" || tokenInAmount.IsZero() {
+			return "", "", tokenInAmount, Quote{}, error_types.ErrUnsupportedTokenAndChain
+		}
+		log.Debugf("#%d best route for %s %s is use %s %s token from %s chain by specify source chains and token", args.OrderId, args.TargetChain, args.TargetToken, tokenInAmount, tokenInName, tokenInChainName)
 		return
 	}
 
@@ -121,37 +139,16 @@ func (l Li) GetBestQuote(ctx context.Context, args provider.SwapParams) (tokenIn
 			continue
 		}
 		for _, v := range sourceToken.Chains {
-			if strings.EqualFold(v, args.TargetChain) && sourceToken.Name == args.TargetToken {
+			if args.SourceChain != "" && v != args.SourceChain {
 				continue
 			}
-			if len(args.SourceChainNames) > 0 && !utils.InArrayFold(v, args.SourceChainNames) {
-				continue
-			}
-			if err := getQuote(v, sourceToken.Name); err != nil {
-				continue
-			}
+			getQuote(v, sourceToken.Name)
 		}
 	}
-
 	if tokenInChainName == "" || tokenInName == "" || tokenInAmount.IsZero() {
 		return "", "", tokenInAmount, Quote{}, error_types.ErrUnsupportedTokenAndChain
 	}
-	tokenIn := l.conf.GetTokenInfoOnChain(tokenInName, tokenInChainName)
-
-	quoteData, err := l.Quote(ctx, QuoteParams{
-		FromChainId:   constant.GetChainId(tokenInChainName),
-		ToChainId:     constant.GetChainId(args.TargetChain),
-		FromToken:     common.HexToAddress(tokenIn.ContractAddress),
-		ToToken:       common.HexToAddress(tokenOut.ContractAddress),
-		FromAmountWei: decimal.NewFromBigInt(chains.EthToWei(tokenInAmount, tokenIn.Decimals), 0),
-		FromAddress:   args.Sender.GetAddress(true),
-		ToAddress:     common.HexToAddress(args.Receiver),
-	})
-	if err != nil {
-		return tokenInName, tokenInChainName, tokenInAmount, Quote{}, err
-	}
-	quote = quoteData
-	log.Debugf("best tokenInName: %s, tokenInChainName: %s, tokenInAmount: %s", tokenInName, tokenInChainName, tokenInAmount)
+	log.Debugf("#%d best route for %s %s is use %s %s token from %s chain", args.OrderId, args.TargetChain, args.TargetToken, tokenInAmount, tokenInName, tokenInChainName)
 	return
 }
 

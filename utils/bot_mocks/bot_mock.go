@@ -6,6 +6,7 @@ import (
 	context "context"
 	bot "omni-balance/utils/bot"
 
+	"github.com/shopspring/decimal"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -67,6 +68,11 @@ func (_m *Bot) Name() string {
 	}
 
 	return r0
+}
+
+func (_m *Bot) Balance(ctx context.Context, args bot.Params) (decimal.Decimal, error) {
+	ret := _m.Called(ctx, args)
+	return ret.Get(0).(decimal.Decimal), ret.Error(1)
 }
 
 // NewBot creates a new instance of Bot. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

@@ -12,7 +12,6 @@ import (
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/provider"
 	"strconv"
-	"strings"
 	"time"
 
 	log "omni-balance/utils/logging"
@@ -20,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
+	"github.com/tidwall/gjson"
 )
 
 var (
@@ -35,7 +35,7 @@ type QuoteParams struct {
 	ToTokenChainId   int             `json:"toTokenChainId"`
 }
 
-func (r Routernitro) Quote(ctx context.Context, args QuoteParams) (Quote, error) {
+func (r Routernitro) Quote(ctx context.Context, args QuoteParams) (gjson.Result, error) {
 	params := &url.Values{}
 	params.Set("fromTokenAddress", StandardizeZeroAddress(args.FromTokenAddress).Hex())
 	params.Set("toTokenAddress", StandardizeZeroAddress(args.ToTokenAddress).Hex())
@@ -45,47 +45,32 @@ func (r Routernitro) Quote(ctx context.Context, args QuoteParams) (Quote, error)
 	params.Set("partnerId", "1")
 	params.Set("slippageTolerance", "2")
 	params.Set("destFuel", "0")
-	var result Quote
 	u, _ := url.Parse("https://api-beta.pathfinder.routerprotocol.com/api/v2/quote")
 	u.RawQuery = params.Encode()
-	if err := utils.Request(ctx, "GET", u.String(), nil, &result); err != nil {
-		return result, err
+	data, err := utils.RequestBinary(ctx, "GET", u.String(), nil)
+	if err != nil {
+		return gjson.Result{}, err
 	}
-	if err := result.Error(); err != nil {
-		return result, err
-	}
-	return result, nil
+	return gjson.Parse(string(data)), nil
 }
 
-func (r Routernitro) BuildTx(ctx context.Context, quote Quote, sender, receiver common.Address) (Txn, error) {
-	quoteData := utils.ToMap(quote)
-	quoteData["receiverAddress"] = receiver.Hex()
-	if receiver.Cmp(constant.ZeroAddress) == 0 {
-		quoteData["receiverAddress"] = sender.Hex()
+func (r Routernitro) BuildTx(ctx context.Context, quote gjson.Result, sender, receiver common.Address) (Txn, error) {
+	var (
+		result Txn
+		body   = make(map[string]interface{})
+	)
+	if err := json.Unmarshal([]byte(quote.String()), &body); err != nil {
+		return Txn{}, err
 	}
-	quoteData["senderAddress"] = sender.Hex()
-	if quote.BridgeFee.Symbol == "" {
-		delete(quoteData, "bridgeFee")
-		quoteData["bridgeFee"] = map[string]string{}
-	}
-
-	if quote.Source.StableReserveAsset.Symbol == "" {
-		data := quoteData["source"].(map[string]interface{})
-		delete(data, "stableReserveAsset")
-		quoteData["source"] = data
+	body["receiverAddress"] = receiver.Hex()
+	body["senderAddress"] = sender.Hex()
+	data, err := json.Marshal(body)
+	if err != nil {
+		return Txn{}, err
 	}
 
-	if quote.Destination.StableReserveAsset.Symbol == "" {
-		data := quoteData["destination"].(map[string]interface{})
-		delete(data, "stableReserveAsset")
-		quoteData["destination"] = data
-	}
-
-	var body = bytes.NewBuffer(nil)
-	_ = json.NewEncoder(body).Encode(quoteData)
-	var result Txn
-	err := utils.Request(ctx, "POST",
-		"https://api-beta.pathfinder.routerprotocol.com/api/v2/transaction", body, &result)
+	err = utils.Request(ctx, "POST",
+		"https://api-beta.pathfinder.routerprotocol.com/api/v2/transaction", bytes.NewReader(data), &result)
 	if err != nil {
 		return Txn{}, err
 	}
@@ -96,9 +81,9 @@ func (r Routernitro) BuildTx(ctx context.Context, quote Quote, sender, receiver 
 }
 
 func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams) (tokenInName, tokenInChainName string,
-	tokenInAmount decimal.Decimal, quote Quote, err error) {
+	tokenInAmount decimal.Decimal, quote gjson.Result, err error) {
 	if args.TargetToken == "" || args.TargetChain == "" {
-		return tokenInName, tokenInChainName, tokenInAmount, Quote{}, errors.New("target token or target chain is empty")
+		return tokenInName, tokenInChainName, tokenInAmount, gjson.Result{}, errors.New("target token or target chain is empty")
 	}
 
 	var (
@@ -106,64 +91,90 @@ func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams)
 		msg      = fmt.Sprintf("wallet %s rebalance %s on %s", args.Receiver, args.TargetToken, args.TargetChain)
 	)
 
-	getQuote := func(chainName, token string) error {
-		sourceToken := r.conf.GetTokenInfoOnChain(token, chainName)
+	getQuote := func(chainName, tokenName string) {
+		sourceToken := r.conf.GetTokenInfoOnChain(tokenName, chainName)
 		chain := r.conf.GetChainConfig(chainName)
 		tokenIn := r.conf.GetTokenInfoOnChain(sourceToken.Name, chainName)
 		if tokenIn.ContractAddress == "" {
-			return errors.New("tokenIn contract address is empty")
+			log.Warnf("#%d %s %s tokenIn contract address is empty", args.OrderId, msg, tokenIn.Name)
+			return
 		}
 		client, err := chains.NewTryClient(ctx, chain.RpcEndpoints)
 		if err != nil {
 			log.Warnf("#%d %s %s get chain %s client error: %s", args.OrderId, msg, tokenIn.Name, chain.Name, err)
-			return err
+			return
 		}
-
-		tokenInTestBalance := decimal.RequireFromString("1")
-		tokenInTestBalanceWei := decimal.NewFromBigInt(chains.EthToWei(tokenInTestBalance, tokenIn.Decimals), 0)
-		quoteData, err := r.Quote(ctx, QuoteParams{
-			FromTokenAddress: common.HexToAddress(tokenIn.ContractAddress),
-			ToTokenAddress:   common.HexToAddress(tokenOut.ContractAddress),
-			AmountWei:        tokenInTestBalanceWei,
-			FromTokenChainId: chain.Id,
-			ToTokenChainId:   constant.GetChainId(args.TargetChain),
-		})
-		if err != nil {
-			log.Debugf("#%d %s %s get quote error: %s", args.OrderId, msg, tokenIn.Name, err)
-			return errors.Wrap(err, "get quote")
-		}
-
-		minimumReceived := chains.WeiToEth(quoteData.Destination.TokenAmount.BigInt(), tokenOut.Decimals)
-		needBalance := tokenInTestBalance.Div(minimumReceived).Mul(args.Amount)
-
+		defer client.Close()
 		balance, err := chains.GetTokenBalance(ctx, client, tokenIn.ContractAddress,
 			args.Sender.GetAddress(true).Hex(), tokenIn.Decimals)
 		if err != nil {
-			return errors.Wrap(err, "get balance")
+			log.Warnf("get %s on %s balance error: %s", tokenName, chainName, err)
+			return
+		}
+		if balance.LessThanOrEqual(decimal.Zero) {
+			log.Debugf("%s on %s balance is 0", tokenName, chainName)
+			return
 		}
 
-		log.Debugf("#%d %s %s need %s balance: %s, wallet %s balance: %s on %s",
-			args.OrderId, msg, tokenIn.Name, tokenIn.Name, needBalance, tokenIn.Name, balance, chainName)
-		if needBalance.GreaterThan(balance) {
-			log.Debugf("#%d %s %s need balance: %s, balance: %s", args.OrderId, msg, tokenIn.Name, needBalance, balance)
-			return errors.New("not enough balance")
+		quoteData, err := r.Quote(ctx, QuoteParams{
+			FromTokenAddress: common.HexToAddress(tokenOut.ContractAddress),
+			ToTokenAddress:   common.HexToAddress(tokenIn.ContractAddress),
+			AmountWei:        decimal.NewFromBigInt(chains.EthToWei(args.Amount, tokenOut.Decimals), 0),
+			FromTokenChainId: constant.GetChainId(args.TargetChain),
+			ToTokenChainId:   chain.Id,
+		})
+		if err != nil {
+			log.Debugf("#%d %s %s get quote error: %s", args.OrderId, msg, tokenIn.Name, err)
+			return
+		}
+		tokenAmount := quoteData.Get("destination").Get("tokenAmount").String()
+		if tokenAmount == "" {
+			log.Warnf("#%d %s %s get quote error: destination token amount is empty", args.OrderId, msg, tokenIn.Name)
+			return
+		}
+
+		needTokenInAmount := chains.WeiToEth(decimal.RequireFromString(tokenAmount).BigInt(), tokenIn.Decimals)
+		log.Debugf("get quote, need %s %s on %s to get %s %s on %s",
+			needTokenInAmount, tokenName, chainName, args.Amount, tokenOut.Name, args.TargetChain)
+		// 2% slippage
+		needTokenInAmount = needTokenInAmount.Add(needTokenInAmount.Mul(decimal.RequireFromString("0.02")))
+
+		if needTokenInAmount.GreaterThan(balance) {
+			log.Debugf("%s need %s on %s balance is greater than balance, need: %s, balance: %s",
+				args.Sender.GetAddress(true).Hex(), tokenName, chainName, needTokenInAmount.String(), balance.String())
+			return
 		}
 		if tokenInAmount.Equal(decimal.Zero) {
-			tokenInAmount = needBalance
+			tokenInAmount = needTokenInAmount
 		}
-		if tokenInAmount.GreaterThan(needBalance) {
-			log.Debugf("#%d %s %s need balance: %s, balance: %s", args.OrderId, msg, tokenIn.Name, needBalance, balance)
-			return errors.New("not enough balance")
+		if tokenInAmount.GreaterThan(needTokenInAmount) {
+			return
 		}
-		tokenInAmount = needBalance
+
+		tokenInAmount = needTokenInAmount
 		tokenInName = sourceToken.Name
 		tokenInChainName = chainName
 		quote = quoteData
-		return nil
+		log.Debugf("get best token in chain, token: %s on %s, tokenInAmount: %s", tokenName, chainName, tokenInAmount.String())
 	}
 
 	if args.SourceChain != "" && args.SourceToken != "" {
-		err = getQuote(args.SourceChain, args.SourceToken)
+		getQuote(args.SourceChain, args.SourceToken)
+		if tokenInChainName == "" || tokenInName == "" || tokenInAmount.IsZero() {
+			return "", "", tokenInAmount, gjson.Result{}, error_types.ErrUnsupportedTokenAndChain
+		}
+		log.Debugf("#%d get best route for %s %s is use %s %s token from %s chain by specify source chain and token", args.OrderId, args.TargetChain, args.TargetToken, tokenInAmount, tokenInName, tokenInChainName)
+		return
+	}
+
+	if args.SourceToken != "" && len(args.SourceChainNames) > 0 && args.SourceChain == "" {
+		for _, v := range args.SourceChainNames {
+			getQuote(v, args.SourceToken)
+		}
+		if tokenInChainName == "" || tokenInName == "" || tokenInAmount.IsZero() {
+			return "", "", tokenInAmount, gjson.Result{}, error_types.ErrUnsupportedTokenAndChain
+		}
+		log.Debugf("#%d best route for %s %s is use %s %s token from %s chain by specify source chains and token", args.OrderId, args.TargetChain, args.TargetToken, tokenInAmount, tokenInName, tokenInChainName)
 		return
 	}
 
@@ -172,36 +183,16 @@ func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams)
 			continue
 		}
 		for _, v := range sourceToken.Chains {
-			if strings.EqualFold(v, args.TargetChain) && sourceToken.Name == args.TargetToken {
+			if args.SourceChain != "" && v != args.SourceChain {
 				continue
 			}
-			if len(args.SourceChainNames) > 0 && !utils.InArrayFold(v, args.SourceChainNames) {
-				continue
-			}
-			if err := getQuote(v, sourceToken.Name); err != nil {
-				continue
-			}
+			getQuote(v, sourceToken.Name)
 		}
 	}
-
 	if tokenInChainName == "" || tokenInName == "" || tokenInAmount.IsZero() {
-		return "", "", tokenInAmount, Quote{}, error_types.ErrUnsupportedTokenAndChain
+		return "", "", tokenInAmount, gjson.Result{}, error_types.ErrUnsupportedTokenAndChain
 	}
-	// tokenInAmount 只保留tokenIn.Decimals位小数
-
-	tokenIn := r.conf.GetTokenInfoOnChain(tokenInName, tokenInChainName)
-	quoteData, err := r.Quote(ctx, QuoteParams{
-		FromTokenAddress: common.HexToAddress(tokenIn.ContractAddress),
-		ToTokenAddress:   common.HexToAddress(tokenOut.ContractAddress),
-		AmountWei:        decimal.NewFromBigInt(chains.EthToWei(tokenInAmount, tokenIn.Decimals), 0),
-		FromTokenChainId: constant.GetChainId(tokenInChainName),
-		ToTokenChainId:   constant.GetChainId(args.TargetChain),
-	})
-	if err != nil {
-		return tokenInName, tokenInChainName, tokenInAmount, Quote{}, err
-	}
-	quote = quoteData
-	log.Debugf("#%d %s %s best tokenInName: %s, tokenInChainName: %s, tokenInAmount: %s", args.OrderId, msg, tokenIn.Name, tokenInName, tokenInChainName, tokenInAmount)
+	log.Debugf("#%d best route for %s %s is use %s %s token from %s chain", args.OrderId, args.TargetChain, args.TargetToken, tokenInAmount, tokenInName, tokenInChainName)
 	return
 }
 

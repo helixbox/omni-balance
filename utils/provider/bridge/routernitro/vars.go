@@ -64,9 +64,9 @@ type Quote struct {
 			ChainId        string `json:"chainId"`
 			Address        string `json:"address"`
 			ResourceID     string `json:"resourceID"`
-			IsMintable     bool   `json:"isMintable"`
-			IsWrappedAsset bool   `json:"isWrappedAsset"`
-			IsReserveAsset bool   `json:"isReserveAsset"`
+			IsMintable     *bool  `json:"isMintable,omitempty"`
+			IsWrappedAsset *bool  `json:"isWrappedAsset,omitempty"`
+			IsReserveAsset *bool  `json:"isReserveAsset,omitempty"`
 		} `json:"stableReserveAsset"`
 		TokenAmount         decimal.Decimal `json:"tokenAmount"`
 		StableReserveAmount string          `json:"stableReserveAmount"`

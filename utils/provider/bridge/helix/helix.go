@@ -8,8 +8,9 @@ import (
 	"omni-balance/utils/constant"
 	"omni-balance/utils/provider"
 
+	log "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
 )

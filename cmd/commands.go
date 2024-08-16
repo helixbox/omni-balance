@@ -41,8 +41,8 @@ var (
 				for chainName, chainItems := range result {
 					for tokenName, TokenItems := range chainItems {
 						for address, balance := range TokenItems {
-							if balance.LessThan(decimal.RequireFromString("0")) {
-								w.AppendRow(table.Row{chainName, tokenName, address, "not found in config"})
+							if balance.LessThanOrEqual(decimal.RequireFromString("0")) {
+								// w.AppendRow(table.Row{chainName, tokenName, address, "not found in config"})
 								continue
 							}
 							w.AppendRow(table.Row{chainName, tokenName, address, balance})

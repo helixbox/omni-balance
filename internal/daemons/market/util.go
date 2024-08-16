@@ -48,7 +48,7 @@ func createUpdateLog(ctx context.Context, order models.Order, result provider.Sw
 		updateOrder.Status = provider.TxStatus(models.OrderStatusWaitTransferFromOperator)
 	}
 	if result.Error != "" {
-		log.Errorf("#%d wallet %s rebalance %s on %s %s token failed, error info %s", order.ID, wallet.GetAddress(true).Hex(), order.TargetChainName, order.TokenOutName, order.TokenInName, result.Error)
+		log.Errorf("#%d wallet %s rebalance %s on %s %s token failed, error: %s", order.ID, order.Wallet, order.TokenOutName, order.TargetChainName, order.TokenInName, result.Error)
 	}
 
 	return db.DB().Model(&models.Order{}).Where("id = ?", order.ID).Limit(1).Updates(updateOrder).Error
@@ -175,9 +175,10 @@ func providerSupportsOrder(ctx context.Context, p provider.Provider, order model
 		SourceChainNames: order.TokenInChainNames,
 	})
 	if err != nil {
-		log.Debugf("check token %s on %s use %s error: %s", order.TokenOutName, order.TargetChainName, p.Name(), err.Error())
+		log.Debugf("token %s on %s cannot use %s provider, source chain is '%s', source token is '%s'", order.TokenOutName, order.TargetChainName, p.Name(), order.SourceChainName, order.TokenInName)
 		return nil, false
 	}
+	log.Debugf("check token %s on %s use %s success, the tokenInCosts is %+v", order.TokenOutName, order.TargetChainName, p.Name(), tokenInCosts)
 	return tokenInCosts, true
 }
 

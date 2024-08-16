@@ -13,8 +13,6 @@ import (
 	"omni-balance/utils/provider/bridge/helix_liquidity_claim/abi/lnv3Bridge"
 	"strings"
 
-	log "omni-balance/utils/logging"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
@@ -121,22 +119,12 @@ func (c Claim) ListNeedWithdrawRecords(ctx context.Context, relayer common.Addre
 		return nil, nil
 	}
 	var (
-		result    []NeedWithdrawRecords
-		token     = c.conf.GetTokenInfoOnChainByAddress(tokenAddress, toChain)
-		threshold = c.conf.GetTokenThreshold(relayer.Hex(), token.Name, toChain)
+		result []NeedWithdrawRecords
+		token  = c.conf.GetTokenInfoOnChainByAddress(tokenAddress, toChain)
 	)
 
 	for fromChain, items := range claimRecords {
-		for channel, item := range items {
-			if item.TotalAmount.IsZero() || item.TotalAmount.LessThan(threshold) {
-				log.Debugf("amount is less than threshold, token: %s, chain: %s, amount: %s, threshold: %s",
-					token.Name, toChain, item.TotalAmount.String(), threshold.String(),
-				)
-				continue
-			}
-			log.Debugf("amount is greater than threshold, token: %s, chain: %s, amount: %s, threshold: %s",
-				token.Name, toChain, item.TotalAmount.String(), threshold.String(),
-			)
+		for channel := range items {
 			result = append(result, NeedWithdrawRecords{
 				ClaimInfo: *claimRecords[fromChain][channel],
 				TokenName: token.Name,
