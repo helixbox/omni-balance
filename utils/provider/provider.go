@@ -119,6 +119,7 @@ type SwapParams struct {
 	LastHistory      SwapHistory                        `json:"last_history"`
 	Remark           string                             `json:"remark"`
 	RecordFn         func(s SwapHistory, errs ...error) `json:"-"`
+	CurrentBalance   decimal.Decimal                    `json:"current_balance"`
 }
 
 type SwapResult struct {

@@ -225,7 +225,7 @@ func WithNotify(ctx context.Context, args WithNotifyParams) context.Context {
 		fields["receiver"] = args.Receiver.Hex()
 	}
 	if args.CurrentBalance.GreaterThan(decimal.Zero) {
-		fields["currentBalance"] = fmt.Sprintf("%s %s", args.CurrentBalance, args.TokenOut)
+		fields["currentBalance"] = fmt.Sprintf("%s on %s", args.CurrentBalance, args.TokenOutChain)
 	}
 	return notice.WithFields(ctx, fields)
 }

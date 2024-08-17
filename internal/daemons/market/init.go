@@ -11,6 +11,6 @@ func init() {
 		Description:     "Look for tasks in the database that are not being processed and process them.",
 		TaskFunc:        Run,
 		DefaultInterval: time.Minute * 3,
-		RunOnStart:      true,
+		RunOnStart:      false,
 	})
 }

@@ -21,7 +21,7 @@ func init() {
 		Description:     "Responsible for obtaining the token price, denominated in USDT.",
 		TaskFunc:        Run,
 		DefaultInterval: time.Minute * 3,
-		// RunOnStart:      true,
+		RunOnStart:      true,
 	})
 }
 
@@ -39,7 +39,6 @@ func Run(ctx context.Context, conf configs.Config) error {
 			defer w.Done()
 			result, err := provider.GetTokenPriceInUSDT(ctx, conf.SourceTokens...)
 			if err != nil {
-
 				log.Warnf("%s get token price error: %s", provider.Name(), err)
 				return
 			}

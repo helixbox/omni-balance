@@ -50,6 +50,7 @@ func (b GateLiquidity) Check(ctx context.Context, args bot.Params) ([]bot.Task, 
 			ProviderType:      configs.CEX,
 			ProviderName:      "gate.io",
 			Remark:            b.Name(),
+			CurrentBalance:    task.CurrentBalance,
 		})
 	}
 	return result, processType, nil

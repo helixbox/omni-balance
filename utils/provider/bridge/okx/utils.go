@@ -106,7 +106,6 @@ func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams)
 			return
 		}
 		if balance.LessThanOrEqual(decimal.Zero) {
-			log.Debugf("%s %s on %s balance is 0, skip it.", args.Sender.GetAddress(true).Hex(), tokenName, chainName)
 			return
 		}
 
@@ -125,12 +124,10 @@ func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams)
 			log.Warnf("%s on %s to %s on %s no router list", tokenName, chainName, tokenOut.Name, args.TargetChain)
 			return
 		}
-
-		needTokenInAmount := chains.WeiToEth(quote.RouterList[0].ToTokenAmount.BigInt(), tokenIn.Decimals)
-		log.Debugf("get quote, need %s %s on %s to get %s %s on %s",
-			needTokenInAmount, tokenName, chainName, args.Amount, tokenOut.Name, args.TargetChain)
-		// 2% slippage
-		needTokenInAmount = needTokenInAmount.Add(needTokenInAmount.Mul(decimal.RequireFromString("0.02")))
+		tokenAmount := quote.RouterList[0].ToTokenAmount
+		tokenOutAmount := chains.WeiToEth(tokenAmount.BigInt(), tokenIn.Decimals)
+		// 0.2% slippage + 0.2% fee
+		needTokenInAmount := tokenOutAmount.Add(tokenOutAmount.Mul(decimal.RequireFromString("0.004")))
 
 		if needTokenInAmount.GreaterThan(balance) {
 			log.Debugf("%s need %s on %s balance is greater than balance, need: %s, balance: %s",
@@ -146,8 +143,6 @@ func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams)
 		tokenInAmount = needTokenInAmount
 		tokenInName = sourceToken.Name
 		tokenInChainName = chainName
-		log.Debugf("get best token in chain, token: %s on %s, tokenInAmount: %s", tokenName, chainName, tokenInAmount.String())
-
 	}
 	if args.SourceChain != "" && args.SourceToken != "" {
 		getQuote(args.SourceChain, args.SourceToken)

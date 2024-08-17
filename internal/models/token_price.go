@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
@@ -56,7 +57,7 @@ func FindTokenPrice(db *gorm.DB, tokenName []string) (result map[string]decimal.
 		tokenPrices     []TokenPrice
 		tokenName2Price = make(map[string]TokenPrices)
 	)
-	err = db.Where("token_name in (?)", tokenName).First(&tokenPrices).Error
+	err = db.Where("token_name in (?)", tokenName).Find(&tokenPrices).Error
 	if err != nil {
 		return
 	}

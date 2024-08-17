@@ -71,8 +71,8 @@ func (h HelixLiquidity) Check(ctx context.Context, args bot.Params) ([]bot.Task,
 
 	if total.Add(purchaseAmount).LessThanOrEqual(threshold) {
 		newAmount := threshold.Add(threshold.Mul(decimal.RequireFromString("0.3")))
-		log.Infof("The %s current balance is %s, amount in config is %s, balance(%s) + amount(%s) <= threshold(%s), so set amount to %s",
-			args.Info.Wallet.GetAddress(), total, purchaseAmount, total, purchaseAmount, threshold, newAmount)
+		log.Infof("The %s %s on %s current balance is %s, amount in config is %s, balance(%s) + amount(%s) <= threshold(%s), so set amount to %s",
+			args.Info.Wallet.GetAddress(), args.Info.TokenName, args.Info.Chain, total, purchaseAmount, total, purchaseAmount, threshold, newAmount)
 		purchaseAmount = newAmount
 	}
 	return []bot.Task{
@@ -82,6 +82,7 @@ func (h HelixLiquidity) Check(ctx context.Context, args bot.Params) ([]bot.Task,
 			TokenOutChainName: args.Info.Chain,
 			Amount:            purchaseAmount,
 			Status:            provider.TxStatusPending,
+			CurrentBalance:    total,
 		},
 	}, bot.Queue, nil
 }

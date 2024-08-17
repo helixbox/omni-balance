@@ -332,7 +332,7 @@ func (c *Config) Check() error {
 				}
 			}
 			if !ok {
-				return errors.Errorf("source_token[%d] token name not in chainsMap", index)
+				return errors.Errorf("token %s, source_token[%d]  token name not in chainsMap", v.Name, index)
 			}
 		}
 	}

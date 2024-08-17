@@ -56,6 +56,7 @@ func (b BalanceOnChain) Check(ctx context.Context, args bot.Params) ([]bot.Task,
 		Wallet:            info.Wallet.GetAddress().Hex(),
 		TokenOutName:      info.TokenName,
 		Amount:            amount,
+		CurrentBalance:    balance,
 	})
 	return tasks, bot.Queue, nil
 }

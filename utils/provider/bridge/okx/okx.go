@@ -114,7 +114,17 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 	tokenInAmountWei = decimal.NewFromBigInt(chains.EthToWei(tokenInAmount, tokenIn.Decimals), 0)
 	sourceChain = o.conf.GetChainConfig(args.SourceChain)
 	isTokenInNative := o.conf.IsNativeToken(sourceChain.Name, tokenIn.Name)
-
+	quote, err := o.Quote(ctx, QuoteParams{
+		Amount:           tokenInAmountWei,
+		FormChainId:      sourceChain.Id,
+		ToChainId:        targetChain.Id,
+		ToTokenAddress:   common.HexToAddress(tokenOut.ContractAddress),
+		FromTokenAddress: common.HexToAddress(tokenIn.ContractAddress),
+	})
+	if err != nil {
+		return provider.SwapResult{}, err
+	}
+	tokenOutAmount = chains.WeiToEth(quote.RouterList[0].ToTokenAmount.BigInt(), tokenOut.Decimals)
 	if tokenOutAmount.LessThanOrEqual(decimal.Zero) {
 		return provider.SwapResult{}, errors.New("token out amount is zero")
 	}
@@ -143,17 +153,6 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 	)
 	if !isTokenInNative && actionNumber <= 1 && !isActionSuccess {
 		log.Debugf("#%d %s is not native token, need approve", args.OrderId, tokenIn.Name)
-		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
-			OrderId:         args.OrderId,
-			TokenIn:         tokenIn.Name,
-			TokenOut:        tokenOut.Name,
-			TokenInChain:    args.SourceChain,
-			TokenOutChain:   args.TargetChain,
-			ProviderName:    o.Name(),
-			TokenInAmount:   tokenInAmount,
-			TokenOutAmount:  tokenOutAmount,
-			TransactionType: provider.ApproveTransactionAction,
-		})
 		args.RecordFn(sh.SetStatus(provider.TxStatusPending).SetActions(ApproveTransactionAction).Out())
 		approveTransaction, err := o.approveTransaction(ctx, sourceChain.Id,
 			common.HexToAddress(tokenIn.ContractAddress), tokenInAmountWei)
@@ -171,7 +170,7 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 			WaitTransaction: args.Sender.WaitTransaction,
 			Spender:         common.HexToAddress(approveTransaction.DexContractAddress),
 			// for save next gas, multiply 2
-			AmountWei:   tokenInAmountWei.Mul(decimal.RequireFromString("2")),
+			AmountWei:   tokenInAmountWei.Mul(decimal.RequireFromString("1.02")),
 			IsNotWaitTx: o.conf.GetWalletConfig(string(args.Sender.GetAddress().Hex())).MultiSignType != "",
 			Client:      client,
 		})
@@ -197,6 +196,7 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 			TokenInAmount:   tokenInAmount,
 			TokenOutAmount:  tokenOutAmount,
 			TransactionType: provider.SwapTransactionAction,
+			CurrentBalance:  args.CurrentBalance,
 		})
 		buildTx, err := o.buildTx(ctx, args)
 		if err != nil {

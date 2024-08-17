@@ -68,6 +68,7 @@ func createOrder(ctx context.Context, tasks []bot.Task, processType bot.ProcessT
 			TaskId:           taskId,
 			ProcessType:      string(processType),
 			Remark:           v.Remark,
+			CurrentBalance:   v.CurrentBalance,
 		}
 
 		if err = txn.Create(o).Error; err != nil {

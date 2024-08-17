@@ -112,7 +112,6 @@ func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams)
 			return
 		}
 		if balance.LessThanOrEqual(decimal.Zero) {
-			log.Debugf("%s on %s balance is 0", tokenName, chainName)
 			return
 		}
 
@@ -133,11 +132,9 @@ func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams)
 			return
 		}
 
-		needTokenInAmount := chains.WeiToEth(decimal.RequireFromString(tokenAmount).BigInt(), tokenIn.Decimals)
-		log.Debugf("get quote, need %s %s on %s to get %s %s on %s",
-			needTokenInAmount, tokenName, chainName, args.Amount, tokenOut.Name, args.TargetChain)
-		// 2% slippage
-		needTokenInAmount = needTokenInAmount.Add(needTokenInAmount.Mul(decimal.RequireFromString("0.02")))
+		tokenOutAmount := chains.WeiToEth(decimal.RequireFromString(tokenAmount).BigInt(), tokenIn.Decimals)
+		// 0.2% slippage + 0.2% fee
+		needTokenInAmount := tokenOutAmount.Add(tokenOutAmount.Mul(decimal.RequireFromString("0.004")))
 
 		if needTokenInAmount.GreaterThan(balance) {
 			log.Debugf("%s need %s on %s balance is greater than balance, need: %s, balance: %s",
@@ -155,7 +152,6 @@ func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams)
 		tokenInName = sourceToken.Name
 		tokenInChainName = chainName
 		quote = quoteData
-		log.Debugf("get best token in chain, token: %s on %s, tokenInAmount: %s", tokenName, chainName, tokenInAmount.String())
 	}
 
 	if args.SourceChain != "" && args.SourceToken != "" {

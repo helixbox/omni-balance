@@ -41,6 +41,7 @@ type Config struct {
 
 type Task struct {
 	Wallet            string               `json:"wallet" gorm:"type:varchar(64)"`
+	CurrentBalance    decimal.Decimal      `json:"current_balance"`
 	TokenInName       string               `json:"token_in_name"`
 	TokenOutName      string               `json:"token_out_name" gorm:"type:varchar(64)"`
 	TokenInChainName  string               `json:"source_chain_name"`

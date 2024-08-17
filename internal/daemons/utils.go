@@ -39,6 +39,7 @@ func CreateSwapParams(order models.Order, orderProcess models.OrderProcess, wall
 		RecordFn:         createRecordFunction(order),
 		Order:            order.Order,
 		Remark:           order.Remark,
+		CurrentBalance:   order.CurrentBalance,
 	}
 }
 

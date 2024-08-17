@@ -120,7 +120,9 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 		return provider.SwapResult{}, errors.New("token out amount is zero")
 	}
 	tokenOutAmount = decimal.RequireFromString(quote.Get("destination").Get("tokenAmount").String())
-
+	tokenOutAmount = chains.WeiToEth(tokenOutAmount.BigInt(), tokenOut.Decimals)
+	args.Amount = tokenOutAmount
+	tokenOutAmountWei = decimal.NewFromBigInt(chains.EthToWei(tokenOutAmount, tokenOut.Decimals), 0)
 	if tokenOutAmount.LessThanOrEqual(decimal.Zero) {
 		return provider.SwapResult{}, errors.New("token out amount is zero")
 	}
@@ -152,18 +154,6 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 	if !isTokenInNative && actionNumber <= 1 && !isActionSuccess {
 		log.Debugf("#%d %s is not native token, need approve", args.OrderId, tokenIn.Name)
 		args.RecordFn(sh.SetActions(ApproveTransactionAction).SetStatus(provider.TxStatusPending).Out())
-		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
-			OrderId:         args.OrderId,
-			TokenIn:         tokenIn.Name,
-			TokenOut:        tokenOut.Name,
-			TokenInChain:    args.SourceChain,
-			TokenOutChain:   args.TargetChain,
-			ProviderName:    r.Name(),
-			TokenInAmount:   tokenInAmount,
-			TokenOutAmount:  tokenOutAmount,
-			TransactionType: provider.ApproveTransactionAction,
-		})
-
 		err = chains.TokenApprove(ctx,
 			chains.TokenApproveParams{
 				ChainId:         int64(sourceChain.Id),
@@ -173,7 +163,7 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 				WaitTransaction: args.Sender.WaitTransaction,
 				Spender:         common.HexToAddress(quote.Get("allowanceTo").String()),
 				// for save next gas, multiply 2
-				AmountWei:   tokenInAmountWei.Mul(decimal.RequireFromString("2")),
+				AmountWei:   tokenInAmountWei.Mul(decimal.RequireFromString("1.02")),
 				IsNotWaitTx: r.conf.GetWalletConfig(string(args.Sender.GetAddress().Hex())).MultiSignType != "",
 				Client:      client,
 			})

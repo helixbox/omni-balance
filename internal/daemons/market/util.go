@@ -96,7 +96,7 @@ func getBestProvider(ctx context.Context, order models.Order, conf configs.Confi
 			if !ok || len(tokenInCosts) == 0 {
 				continue
 			}
-			log.Debugf("provider %s can use %s on %s. The tokenInCosts is %+v",
+			log.Infof("provider %s can use %s on %s. The tokenInCosts is %+v",
 				p.Name(), order.TokenOutName, order.TargetChainName, tokenInCosts)
 			canUseProviders = append(canUseProviders, canUseProvider{
 				provider:     p,
@@ -131,16 +131,27 @@ func getBestProvider(ctx context.Context, order models.Order, conf configs.Confi
 		}
 		tokenName2Price, err := models.FindTokenPrice(db.DB(), tokenNames)
 		if err != nil {
-			log.Warnf("find token price error: %s", err.Error())
+			log.Warnf("find %+v token price error: %s", tokenNames, err.Error())
 			continue
 		}
 		// if token out is RING and provider is darwinia, then use darwinia as the provider
 		if order.TokenOutName == "RING" && canUseProvider.provider.Name() == new(darwinia.Bridge).Name() {
 			return canUseProvider.provider, nil
 		}
+		if len(tokenName2Price) == 0 {
+			log.Warnf("not found %+v price, set to 0", tokenNames)
+			minPrice = decimal.Zero
+			providerObj = canUseProvider.provider
+			continue
+		}
 
 		for name, v := range tokenName2Price {
 			log.Debugf("token %s price %s on %s", name, v.String(), canUseProvider.provider.Name())
+			if v.LessThanOrEqual(decimal.Zero) {
+				log.Warnf("token %s price %s is less than or equal to zero, set to 1",
+					name, v.String())
+				v = decimal.RequireFromString("1")
+			}
 			price := v.Mul(tokenInCostsMap[name])
 			if price.IsZero() {
 				continue
@@ -173,12 +184,12 @@ func providerSupportsOrder(ctx context.Context, p provider.Provider, order model
 		TargetChain:      order.TargetChainName,
 		Amount:           order.Amount,
 		SourceChainNames: order.TokenInChainNames,
+		CurrentBalance:   order.CurrentBalance,
 	})
 	if err != nil {
 		log.Debugf("token %s on %s cannot use %s provider, source chain is '%s', source token is '%s'", order.TokenOutName, order.TargetChainName, p.Name(), order.SourceChainName, order.TokenInName)
 		return nil, false
 	}
-	log.Debugf("check token %s on %s use %s success, the tokenInCosts is %+v", order.TokenOutName, order.TargetChainName, p.Name(), tokenInCosts)
 	return tokenInCosts, true
 }
 
