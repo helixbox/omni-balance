@@ -12,6 +12,7 @@ import (
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/provider"
 	"strconv"
+	"strings"
 	"time"
 
 	log "omni-balance/utils/logging"
@@ -174,8 +175,12 @@ func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams)
 		return
 	}
 
+	wallet := r.conf.GetWalletConfig(args.Sender.GetAddress().Hex())
 	for _, sourceToken := range r.conf.SourceTokens {
 		if args.SourceToken != "" && sourceToken.Name != args.SourceToken {
+			continue
+		}
+		if wallet.Mode.IsBalance() && !strings.EqualFold(sourceToken.Name, args.TargetToken) {
 			continue
 		}
 		for _, v := range sourceToken.Chains {

@@ -12,6 +12,7 @@ import (
 	log "omni-balance/utils/logging"
 
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/jinzhu/copier"
 	"github.com/pkg/errors"
 )
 
@@ -106,6 +107,24 @@ func process(ctx context.Context, conf configs.Config, walletAddress, tokenName,
 		if err != nil {
 			return nil, bot.Parallel, err
 		}
-		return tasks, processType, nil
+		var result []bot.Task
+		for index, task := range tasks {
+			if task.TokenInName != "" {
+				result = append(result, tasks[index])
+				continue
+			}
+			walletConf := conf.GetWalletConfig(task.Wallet)
+			if !walletConf.Mode.IsBalance() {
+				continue
+			}
+			var t = new(bot.Task)
+			if err := copier.Copy(t, &task); err != nil {
+				return nil, bot.Parallel, err
+			}
+			t.TokenInName = task.TokenOutName
+			log.Debugf("%s mode is balance, change tokenInName  to %s", task.Wallet, t.TokenInName)
+			result = append(result, *t)
+		}
+		return result, processType, nil
 	}
 }

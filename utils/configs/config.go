@@ -20,6 +20,7 @@ import (
 // ProviderType liquidity providersMap type
 type ProviderType string
 type DbType string
+type Mode string
 
 const (
 	// CEX centralized exchange
@@ -38,6 +39,21 @@ const (
 	// SQLite sqlite
 	SQLite DbType = "SQLite"
 )
+
+const (
+	Balance Mode = "balance"
+	Swap    Mode = "swap"
+)
+
+func (m Mode) String() string {
+	return string(m)
+}
+func (m Mode) IsBalance() bool {
+	return m == Balance
+}
+func (m Mode) IsSwap() bool {
+	return m == Swap
+}
 
 type Config struct {
 	ApiKey string `json:"api_key" yaml:"apiKey" comment:"API key"`
@@ -83,7 +99,7 @@ type Wallet struct {
 	// BotTypes The type of monitoring, support: balance_on_chain, helix_liquidity, gate_liquidity, the default is balance_on_chain.
 	BotTypes      []BotConfig   `json:"bot_types" yaml:"botTypes" comment:"BotTypes The type of monitoring, support: balance_on_chain, helix_liquidity, gate_liquidity, the default is balance_on_chain."`
 	Address       string        `json:"address" yaml:"address" comment:"Monitoring address"`
-	Mode          string        `json:"mode" yaml:"mode" comment:"rebalance mode, support: balance, swap. balance: no swap, only transfer token on chain; swap: swap token on chain"`
+	Mode          Mode          `json:"mode" yaml:"mode" comment:"rebalance mode, support: balance, swap. balance: no swap, only transfer token on chain; swap: swap token on chain"`
 	Operator      Operator      `json:"operator" yaml:"operator" comment:"Used to isolate the monitoring address and the operation address, preventing the leakage of the monitoring address private key. If Operator is empty, it is not enabled. If 'multi_sign_type' is not empty, 'address' is multi sign address, 'operator' is multi sign operator address."`
 	MultiSignType string        `json:"multi_sign_type" yaml:"multiSignType" comment:"multi sign address type, support: safe. If not empty, 'address' is multi sign address, 'operator' is multi sign operator address"`
 	Tokens        []WalletToken `json:"tokens" yaml:"tokens" comment:"Tokens to be monitored"`
@@ -457,17 +473,6 @@ func (c *Config) GetWallet(wallet string) wallets.Wallets {
 
 func (c *Config) GetWalletConfig(wallet string) Wallet {
 	return c.wallets[wallet]
-}
-
-func (c *Config) GetWalletMode(wallet string) string {
-	switch strings.ToLower(c.wallets[wallet].Mode) {
-	case "balance":
-		return "balance"
-	case "swap":
-		return "swap"
-	default:
-		return "balance"
-	}
 }
 
 func (c *Config) GetWalletTokenInfo(wallet, tokenName string) WalletToken {

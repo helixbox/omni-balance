@@ -64,7 +64,6 @@ func Usage(_ *cli.Context) error {
 }
 
 func Action(cli *cli.Context) error {
-	fmt.Println(cli.String("conf"))
 	if err := initConfig(ctx, cli.Bool("placeholder"), cli.String("conf"), cli.String("port")); err != nil {
 		return errors.Wrap(err, "init config")
 	}

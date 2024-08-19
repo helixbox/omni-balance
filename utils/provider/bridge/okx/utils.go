@@ -164,8 +164,12 @@ func (o *OKX) GetBestTokenInChain(ctx context.Context, args provider.SwapParams)
 		return
 	}
 
+	wallet := o.conf.GetWalletConfig(args.Sender.GetAddress().Hex())
 	for _, sourceToken := range o.conf.SourceTokens {
 		if args.SourceToken != "" && sourceToken.Name != args.SourceToken {
+			continue
+		}
+		if wallet.Mode.IsBalance() && !strings.EqualFold(sourceToken.Name, args.TargetToken) {
 			continue
 		}
 		for _, v := range sourceToken.Chains {

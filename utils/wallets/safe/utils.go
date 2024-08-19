@@ -110,10 +110,16 @@ type Transaction struct {
 
 func (s *Safe) GetDomainByCtx(ctx context.Context) string {
 	chainName := cast.ToString(ctx.Value(constant.ChainNameKeyInCtx))
+	if chainName == "" {
+		debug.PrintStack()
+		log.Fatalf("chain name not found in context")
+	}
 	if _, ok := safeDomain[chainName]; ok {
 		return safeDomain[chainName]
 	}
-	panic("chain name not found in context")
+	debug.PrintStack()
+	log.Fatalf("chain name %s not found in safe domain", chainName)
+	return ""
 }
 
 func (s *Safe) GetChainIdByCtx(ctx context.Context) int {

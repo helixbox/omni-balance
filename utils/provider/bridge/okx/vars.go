@@ -139,20 +139,8 @@ type BuildTxData struct {
 }
 
 type QuoteData struct {
-	FromChainId int `json:"fromChainId"`
-	FromToken   struct {
-		Decimals             int    `json:"decimals"`
-		TokenContractAddress string `json:"tokenContractAddress"`
-		TokenSymbol          string `json:"tokenSymbol"`
-	} `json:"fromToken"`
 	FromTokenAmount string `json:"fromTokenAmount"`
-	ToChainId       int    `json:"toChainId"`
-	ToToken         struct {
-		Decimals             int    `json:"decimals"`
-		TokenContractAddress string `json:"tokenContractAddress"`
-		TokenSymbol          string `json:"tokenSymbol"`
-	} `json:"toToken"`
-	RouterList []struct {
+	RouterList      []struct {
 		EstimateTime      string `json:"estimateTime"`
 		FromDexRouterList []struct {
 			Router        string `json:"router"`
