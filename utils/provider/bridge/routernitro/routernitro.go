@@ -79,7 +79,7 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 		targetChain       = r.conf.GetChainConfig(args.TargetChain)
 		tokenOut          = r.conf.GetTokenInfoOnChain(args.TargetToken, targetChain.Name)
 		tokenOutAmount    = args.Amount
-		tokenOutAmountWei = decimal.NewFromBigInt(chains.EthToWei(tokenOutAmount, tokenOut.Decimals), 0)
+		tokenOutAmountWei decimal.Decimal
 		tokenIn           configs.Token
 		tokenInAmount     decimal.Decimal
 		tokenInAmountWei  decimal.Decimal
