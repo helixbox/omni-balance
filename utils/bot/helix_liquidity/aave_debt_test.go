@@ -41,4 +41,21 @@ func TestAave_BalanceOf(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, balance.String(), strconv.Itoa(1000-900))
+
+	mockClient = chain_mocks.NewMockClient(t)
+	mockClient.On("CallContract", context.TODO(), ethereum.CallMsg{To: &token, Data: input}, mock.Anything).Return(
+		chains.EthToWei(decimal.RequireFromString("0"), 6).Bytes(), nil,
+	)
+
+	mockClient.On("CallContract", context.TODO(), ethereum.CallMsg{To: &vtoken, Data: input}, mock.Anything).Return(
+		chains.EthToWei(decimal.RequireFromString("100"), 6).Bytes(), nil,
+	)
+	balance, err = new(Aave).BalanceOf(context.TODO(), DebtParams{
+		Address: constant.ZeroAddress,
+		Token:   "USDC",
+		Client:  mockClient,
+		Chain:   constant.ArbitrumSepolia,
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, balance.String(), strconv.Itoa(-100))
 }
