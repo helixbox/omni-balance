@@ -38,11 +38,9 @@ func (r Routernitro) GetCost(ctx context.Context, args provider.SwapParams) (pro
 		err        error
 		costAmount decimal.Decimal
 	)
-	if args.SourceChain == "" || args.SourceToken == "" {
-		args.SourceToken, args.SourceChain, costAmount, _, err = r.GetBestQuote(ctx, args)
-		if err != nil {
-			return nil, err
-		}
+	args.SourceToken, args.SourceChain, costAmount, _, err = r.GetBestQuote(ctx, args)
+	if err != nil {
+		return nil, err
 	}
 	if args.SourceChain == "" || args.SourceToken == "" || costAmount.IsZero() {
 		return nil, error_types.ErrUnsupportedTokenAndChain

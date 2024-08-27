@@ -37,22 +37,20 @@ func (r Bungee) GetCost(ctx context.Context, args provider.SwapParams) (provider
 		costAmount decimal.Decimal
 	)
 	if _, ok := SupportedChain[args.TargetChain]; !ok {
-		return nil, error_types.ErrUnsupportedTokenAndChain
+		return nil, errors.Wrapf(error_types.ErrUnsupportedTokenAndChain, "target chain %s", args.TargetChain)
 	}
 
-	if args.SourceChain == "" || args.SourceToken == "" {
-		var quote gjson.Result
-		args.SourceToken, args.SourceChain, costAmount, quote, err = r.GetBestQuote(ctx, args)
-		if err != nil {
-			return nil, err
-		}
-		if len(quote.Get("result.routes").Array()) == 0 {
-			return nil, error_types.ErrUnsupportedTokenAndChain
-		}
+	var quote gjson.Result
+	args.SourceToken, args.SourceChain, costAmount, quote, err = r.GetBestQuote(ctx, args)
+	if err != nil {
+		return nil, errors.Wrap(err, "get best quote")
+	}
+	if len(quote.Get("result.routes").Array()) == 0 {
+		return nil, errors.Wrapf(error_types.ErrUnsupportedTokenAndChain, "%s -> %s not found any routes", args.SourceChain, args.TargetChain)
 	}
 
 	if args.SourceChain == "" || args.SourceToken == "" || costAmount.IsZero() {
-		return nil, error_types.ErrUnsupportedTokenAndChain
+		return nil, errors.Wrapf(error_types.ErrUnsupportedTokenAndChain, "%s -> %s tokenIn is 0", args.SourceChain, args.TargetChain)
 	}
 	return provider.TokenInCosts{
 		provider.TokenInCost{
@@ -86,7 +84,7 @@ func (r Bungee) CheckToken(ctx context.Context, tokenName, tokenInChainName, tok
 		ToTokenChainId:   tokenOuChain.Id,
 	})
 	if len(quote.Get("result").Get("routes").Array()) == 0 {
-		return false, error_types.ErrUnsupportedTokenAndChain
+		return false, errors.Wrap(error_types.ErrUnsupportedTokenAndChain, "route not found")
 	}
 	return err == nil, err
 }
@@ -136,7 +134,7 @@ func (r Bungee) Swap(ctx context.Context, args provider.SwapParams) (provider.Sw
 	}
 
 	if len(quotes.Get("result").Get("routes").Array()) == 0 {
-		return provider.SwapResult{}, error_types.ErrUnsupportedTokenAndChain
+		return provider.SwapResult{}, errors.Wrap(error_types.ErrUnsupportedTokenAndChain, "route not found")
 	}
 	quote = quotes.Get("result").Get("routes").Array()[0]
 	tokenOutAmountWei = decimal.RequireFromString(quote.Get("toAmount").String())

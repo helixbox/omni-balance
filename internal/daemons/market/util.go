@@ -180,6 +180,7 @@ func providerSupportsOrder(ctx context.Context, p provider.Provider, order model
 		SourceToken:      order.TokenInName,
 		Sender:           conf.GetWallet(order.Wallet),
 		TargetToken:      order.TokenOutName,
+		SourceChain:      order.SourceChainName,
 		Receiver:         order.Wallet,
 		TargetChain:      order.TargetChainName,
 		Amount:           order.Amount,

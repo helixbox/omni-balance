@@ -137,7 +137,7 @@ func (c Claim) ListNeedWithdrawRecords(ctx context.Context, relayer common.Addre
 }
 
 func (c Claim) ListClaim(ctx context.Context, relayer, tokenAddress common.Address, toChain string) (map[string]map[string]*ClaimInfo, error) {
-	query := `{historyRecords(row: 100,bridges: ["lnv3"],needWithdrawLiquidity: true,relayer: "%s",toChains: ["%s"],recvTokenAddress: "%s") {total, records { id sender relayer sendTokenAddress lastRequestWithdraw sendAmount recvTokenAddress toChain fromChain }}}`
+	query := `{historyRecords(row: 100,bridges: ["lnv3"],needWithdrawLiquidity: true,relayer: "%s",fromChains: ["%s"],recvTokenAddress: "%s") {total, records { id sender relayer sendTokenAddress lastRequestWithdraw sendAmount recvTokenAddress toChain fromChain }}}`
 	query = fmt.Sprintf(query,
 		strings.ToLower(relayer.Hex()),
 		toChain,

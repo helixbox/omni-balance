@@ -15,6 +15,7 @@ import (
 	"omni-balance/utils/configs"
 	"omni-balance/utils/notice"
 	"omni-balance/utils/provider"
+	_ "omni-balance/utils/provider/bridge/bungee"
 	_ "omni-balance/utils/provider/bridge/darwinia"
 	_ "omni-balance/utils/provider/bridge/helix_liquidity_claim"
 	_ "omni-balance/utils/provider/bridge/okx"
@@ -67,7 +68,9 @@ func Action(cli *cli.Context) error {
 	if err := initConfig(ctx, cli.Bool("placeholder"), cli.String("conf"), cli.String("port")); err != nil {
 		return errors.Wrap(err, "init config")
 	}
-	log.Infof("version: %s, commit: %s, commitTime: %s", version, commitMessage, commitTime)
+	if version != "" && commitTime != "" {
+		log.Infof("version: %s, commit: %s, commitTime: %s", version, commitMessage, commitTime)
+	}
 
 	if err := notice.Init(notice.Type(config.Notice.Type), config.Notice.Config, config.Notice.Interval); err != nil {
 		log.Warnf("init notice error: %v", err)

@@ -143,6 +143,8 @@ func (r Bungee) GetBestQuote(ctx context.Context, args provider.SwapParams) (tok
 			AmountWei:        decimal.NewFromBigInt(chains.EthToWei(args.Amount, tokenOut.Decimals), 0),
 			FromTokenChainId: constant.GetChainId(args.TargetChain),
 			ToTokenChainId:   chain.Id,
+			Sender:           args.Sender.GetAddress(true),
+			Receiver:         common.HexToAddress(args.Receiver),
 		})
 		if err != nil {
 			log.Debugf("#%d %s %s get quote error: %s", args.OrderId, msg, tokenIn.Name, err)
@@ -183,7 +185,6 @@ func (r Bungee) GetBestQuote(ctx context.Context, args provider.SwapParams) (tok
 		tokenInChainName = chainName
 		quote = quoteData
 	}
-
 	if args.SourceChain != "" && args.SourceToken != "" {
 		getQuote(args.SourceChain, args.SourceToken)
 		if tokenInChainName == "" || tokenInName == "" || tokenInAmount.IsZero() {

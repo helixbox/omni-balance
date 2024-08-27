@@ -46,11 +46,9 @@ func (o *OKX) GetCost(ctx context.Context, args provider.SwapParams) (provider.T
 		costAmount decimal.Decimal
 	)
 
-	if args.SourceChain == "" || args.SourceToken == "" {
-		args.SourceToken, args.SourceChain, costAmount, err = o.GetBestTokenInChain(ctx, args)
-		if err != nil {
-			return nil, err
-		}
+	args.SourceToken, args.SourceChain, costAmount, err = o.GetBestTokenInChain(ctx, args)
+	if err != nil {
+		return nil, err
 	}
 	if args.SourceChain == "" || args.SourceToken == "" || costAmount.IsZero() {
 		return nil, error_types.ErrUnsupportedTokenAndChain
