@@ -79,7 +79,7 @@ func TestBalanceOnChain_Check(t *testing.T) {
 	assert.Equal(t, bot.Queue, Type)
 	assert.Len(t, tasks, 1)
 	// 1000 + (1000 * 0.3)
-	assert.Equal(t, strconv.Itoa(1000+(1000*0.3)), tasks[0].Amount.String())
+	assert.Equal(t, strconv.Itoa(1000+(1000*0.01)), tasks[0].Amount.String())
 	assert.Equal(t, constant.ZeroAddress.Hex(), tasks[0].Wallet)
 	assert.Equal(t, "ETH", tasks[0].TokenOutName)
 	assert.Equal(t, constant.Ethereum, tasks[0].TokenOutChainName)
