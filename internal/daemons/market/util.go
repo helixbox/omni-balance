@@ -188,7 +188,7 @@ func providerSupportsOrder(ctx context.Context, p provider.Provider, order model
 		CurrentBalance:   order.CurrentBalance,
 	})
 	if err != nil {
-		log.Debugf("token %s on %s cannot use %s provider, source chain is '%s', source token is '%s'", order.TokenOutName, order.TargetChainName, p.Name(), order.SourceChainName, order.TokenInName)
+		log.Debugf("token %s on %s cannot use %s provider, source chain is '%s', source token is '%s', err : %s", order.TokenOutName, order.TargetChainName, p.Name(), order.SourceChainName, order.TokenInName, err)
 		return nil, false
 	}
 	return tokenInCosts, true

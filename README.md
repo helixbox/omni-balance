@@ -26,7 +26,7 @@ Omni Balance is an intelligent liquidity management tool designed to achieve sea
 | [OKX web3](https://www.okx.com/zh-hans/web3/build/docs/waas/dex-crosschain-swap) | ✅    | ✅           |
 | [Router Nitro](https://app.routernitro.com/swap)                                 | ✅    | ✅           |
 | [bungee](https://www.bungee.exchange/)                                 | ✅    | ✅           |
-
+| [Li.FI](https://li.fi/)                                                          | ✅    | ✅           |
 
 ### Installation
 
