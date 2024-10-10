@@ -160,6 +160,9 @@ func do(ctx context.Context, order models.Order, conf configs.Config) {
 	}
 	removeOrderError(order.ID)
 	order = models.GetOrder(ctx, db.DB(), order.ID)
+	if order.SourceChainName == "" || order.Tx == "" {
+		return
+	}
 	err = notice.Send(
 		provider.WithNotify(ctx, provider.WithNotifyParams{
 			TaskId:         order.TaskId,

@@ -34,9 +34,10 @@ type Bot interface {
 }
 
 type Config struct {
-	Wallet    wallets.Wallets
-	TokenName string `json:"token_name"`
-	Chain     string `json:"chains"`
+	Wallet     wallets.Wallets
+	TokenName  string          `json:"token_name"`
+	TokenPrice decimal.Decimal `json:"token_price"`
+	Chain      string          `json:"chains"`
 }
 
 type Task struct {

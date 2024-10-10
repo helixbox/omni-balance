@@ -79,8 +79,8 @@ func (l Li) Swap(ctx context.Context, args provider.SwapParams) (result provider
 	var (
 		targetChain       = l.conf.GetChainConfig(args.TargetChain)
 		tokenOut          = l.conf.GetTokenInfoOnChain(args.TargetToken, targetChain.Name)
-		tokenOutAmount    = args.Amount
-		tokenOutAmountWei = decimal.NewFromBigInt(chains.EthToWei(tokenOutAmount, tokenOut.Decimals), 0)
+		tokenOutAmount    decimal.Decimal
+		tokenOutAmountWei decimal.Decimal
 		tokenIn           configs.Token
 		tokenInAmount     decimal.Decimal
 		tokenInAmountWei  decimal.Decimal

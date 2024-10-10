@@ -2,6 +2,7 @@ package helix_liquidity
 
 import (
 	"context"
+	"omni-balance/utils/bot/helix_liquidity/lendingpool"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/constant"
 
@@ -350,7 +351,8 @@ var (
 			},
 		},
 		constant.ArbitrumSepolia: {
-			Chain: constant.ArbitrumSepolia,
+			Chain:  constant.ArbitrumSepolia,
+			L2Pool: common.HexToAddress("0xBfC91D59fdAA134A4ED45f7B584cAf96D7792Eff"),
 			DebtTokens: map[string]debtTokens{
 				"USDC": {
 					Name:            "USDC",
@@ -386,7 +388,7 @@ type Aave struct {
 func (a Aave) BalanceOf(ctx context.Context, args DebtParams) (decimal.Decimal, error) {
 	conf, ok := aaveAddressBook[args.Chain]
 	if !ok || conf.Chain == "" || conf.DebtTokens[args.Token].Name == "" {
-		log.Warnf("chain %s not support", args.Chain)
+		log.Warnf("chain %s token %s not support", args.Chain, args.Token)
 		return decimal.Zero, nil
 	}
 	atokenBalance, err := chains.GetTokenBalance(ctx, args.Client, conf.DebtTokens[args.Token].AToken.Hex(),
@@ -400,7 +402,23 @@ func (a Aave) BalanceOf(ctx context.Context, args DebtParams) (decimal.Decimal, 
 	if err != nil {
 		return decimal.Zero, errors.Wrap(err, "get vtoken balance error")
 	}
-	return atokenBalance.Sub(vtokenBalance), nil
+	if args.TokenPrice.InexactFloat64() <= 0 {
+		return atokenBalance.Sub(vtokenBalance), nil
+	}
+	pool, err := lendingpool.NewLendingpoolCaller(conf.L2Pool, args.Client)
+	if err != nil {
+		return decimal.Zero, errors.Wrap(err, "new lendingpool caller error")
+	}
+	user, err := pool.GetUserAccountData(nil, args.Address)
+	if err != nil {
+		return decimal.Zero, errors.Wrap(err, "get user account data error")
+	}
+	if user.AvailableBorrowsBase.Int64() <= 0 {
+		return atokenBalance.Sub(vtokenBalance), nil
+	}
+	AvailableBorrowsBalance := chains.WeiToEth(user.AvailableBorrowsBase, 8)
+	return AvailableBorrowsBalance.Div(args.TokenPrice), nil
+
 }
 
 func (a Aave) Name() string {

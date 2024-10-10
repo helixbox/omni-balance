@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"omni-balance/internal/daemons/market"
+	"omni-balance/internal/db"
+	"omni-balance/internal/models"
 	"omni-balance/utils/bot"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
@@ -14,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/jinzhu/copier"
 	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 )
 
 func Run(ctx context.Context, conf configs.Config) error {
@@ -95,12 +98,22 @@ func process(ctx context.Context, conf configs.Config, walletAddress, tokenName,
 		panic(fmt.Sprintf("%s botType not found", botType))
 	}
 	return func() ([]bot.Task, bot.ProcessType, error) {
+		// get token price
+		tokenPrices, err := models.FindTokenPrice(db.DB(), []string{tokenName})
+		if err != nil {
+			return nil, bot.Parallel, err
+		}
+		if len(tokenPrices) == 0 {
+			tokenPrices = make(map[string]decimal.Decimal)
+		}
+
 		tasks, processType, err := m.Check(ctx, bot.Params{
 			Conf: conf,
 			Info: bot.Config{
-				Wallet:    conf.GetWallet(walletAddress),
-				TokenName: tokenName,
-				Chain:     chainName,
+				Wallet:     conf.GetWallet(walletAddress),
+				TokenName:  tokenName,
+				Chain:      chainName,
+				TokenPrice: tokenPrices[tokenName],
 			},
 			Client: client,
 		})

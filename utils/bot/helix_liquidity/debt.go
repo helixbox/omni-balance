@@ -14,10 +14,11 @@ type Debt interface {
 }
 
 type DebtParams struct {
-	Address common.Address
-	Token   string
-	Client  simulated.Client
-	Chain   string
+	Address    common.Address
+	Token      string
+	TokenPrice decimal.Decimal
+	Client     simulated.Client
+	Chain      string
 }
 
 var (

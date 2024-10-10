@@ -43,10 +43,11 @@ func (b HelixLiquidity) Balance(ctx context.Context, args bot.Params) (decimal.D
 	}
 	for _, v := range debtImpl {
 		balance, err := v.BalanceOf(ctx, DebtParams{
-			Address: args.Info.Wallet.GetAddress(),
-			Chain:   args.Info.Chain,
-			Client:  args.Client,
-			Token:   token.Name,
+			Address:    args.Info.Wallet.GetAddress(),
+			Chain:      args.Info.Chain,
+			Client:     args.Client,
+			Token:      token.Name,
+			TokenPrice: args.Info.TokenPrice,
 		})
 		if err != nil {
 			return decimal.Zero, errors.Wrapf(err, "get %s balance of %s error", token.Name, v.Name())
