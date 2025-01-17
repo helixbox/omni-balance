@@ -130,7 +130,7 @@ func (r Routernitro) GetBestQuote(ctx context.Context, args provider.SwapParams)
 
 		tokenAmount := quoteData.Get("destination").Get("tokenAmount").String()
 		if tokenAmount == "" {
-			log.Warnf("#%d %s %s get quote error: destination token amount is empty: %s", args.OrderId, msg, tokenIn.Name, quoteData.Raw)
+			log.Warnf("#%d %s %s from chain %s get quote error: destination token amount is empty: %s", args.OrderId, msg, tokenIn.Name, chainName, quoteData.Raw)
 			return
 		}
 

@@ -413,7 +413,7 @@ func (a Aave) BalanceOf(ctx context.Context, args DebtParams) (decimal.Decimal, 
 	if err != nil {
 		return decimal.Zero, errors.Wrap(err, "get user account data error")
 	}
-	if user.AvailableBorrowsBase.Int64() <= 0 {
+	if user.AvailableBorrowsBase.Int64() <= 0 || args.TokenPrice.Equal(decimal.RequireFromString("1")) {
 		return atokenBalance.Sub(vtokenBalance), nil
 	}
 	AvailableBorrowsBalance := chains.WeiToEth(user.AvailableBorrowsBase, 8)
