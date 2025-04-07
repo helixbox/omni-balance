@@ -25,6 +25,21 @@ func init() {
 	})
 }
 
+// Run initiates the cross-chain order processing workflow.
+// Parameters:
+//   - ctx: Context for request cancellation and timeouts
+//   - conf: Application configuration containing chain and provider settings
+//
+// Returns:
+//   - error: Any error that occurs during order retrieval or processing, including:
+//   - Database errors when retrieving orders
+//   - Order processing failures from providers
+//
+// The function:
+// 1. Retrieves pending cross-chain orders from persistent storage
+// 2. Skips processing if no orders are found
+// 3. Delegates order execution to configured cross-chain providers
+// 4. Handles error propagation from downstream operations
 func Run(ctx context.Context, conf configs.Config) error {
 	orders, err := retrieveOrders()
 	if err != nil {
@@ -59,6 +74,24 @@ func processOrders(ctx context.Context, conf configs.Config, orders []*models.Or
 	return nil
 }
 
+// start handles the execution of a single cross-chain order.
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - order: The cross-chain order to process
+//   - conf: Application configuration
+//
+// Returns:
+//   - error: Execution errors including:
+//   - Order locking failures
+//   - Bridge provider initialization errors
+//   - Swap execution errors
+//   - Database update failures
+//
+// The function:
+// 1. Acquires an order lock to prevent concurrent processing
+// 2. Initializes the appropriate bridge provider
+// 3. Executes the cross-chain swap
+// 4. Updates order status in persistent storage
 func start(ctx context.Context, order *models.Order, conf configs.Config) error {
 	if order.Lock(db.DB()) {
 		log.Infof("order #%d locked, unlock time is %s", order.ID, time.Unix(order.LockTime+60*60*1, 0))
@@ -86,6 +119,18 @@ func start(ctx context.Context, order *models.Order, conf configs.Config) error 
 	return db.DB().Model(&models.Order{}).Where("id = ?", order.ID).Updates(update).Error
 }
 
+// createUpdateLog generates update fields for order status tracking.
+// Parameters:
+//   - order: Original order object
+//   - result: Swap execution result from provider
+//
+// Returns:
+//   - map[string]interface{}: Database update fields containing:
+//   - Error messages
+//   - Current chain status
+//   - Order status updates
+//
+// Logs the cross-chain transaction outcome
 func createUpdateLog(order *models.Order, result provider.SwapResult) map[string]interface{} {
 	update := map[string]interface{}{
 		"error":              result.Error,
@@ -100,6 +145,22 @@ func createUpdateLog(order *models.Order, result provider.SwapResult) map[string
 	return update
 }
 
+// getBridge selects the first available bridge provider for the order.
+// Parameters:
+//   - ctx: Context for cancellation
+//   - order: Target order for bridge selection
+//   - conf: Application configuration
+//
+// Returns:
+//   - provider.Provider: Initialized bridge provider instance
+//   - error: Errors including:
+//   - Provider initialization failures
+//   - No available bridges meeting cost requirements
+//
+// The function:
+// 1. Iterates through configured bridge providers
+// 2. Checks cost feasibility for each provider
+// 3. Selects first compatible bridge
 func getBridge(ctx context.Context, order *models.Order, conf configs.Config) (provider.Provider, error) {
 	var (
 		bridges []provider.Provider

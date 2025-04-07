@@ -19,6 +19,20 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// Run starts the bot daemon process that manages token balance monitoring and task execution across chains.
+// Parameters:
+//   - ctx: Context for request cancellation and timeouts
+//   - conf: Application configuration containing chain, wallet, and token settings
+//
+// Returns:
+//   - error: Any error that occurs during setup or execution, including client creation errors, order creation failures, etc.
+//
+// The function:
+// 1. Initializes blockchain clients for all configured chains
+// 2. Identifies existing buy tokens to ignore
+// 3. Processes all wallet-token-chain combinations concurrently
+// 4. Creates and dispatches tasks to the market system
+// 5. Waits for all goroutines to complete before exiting
 func Run(ctx context.Context, conf configs.Config) error {
 	existBuyTokens, err := getExistingBuyTokens()
 	if err != nil {
@@ -91,6 +105,22 @@ func Run(ctx context.Context, conf configs.Config) error {
 	return nil
 }
 
+// process creates a task generator function for a specific wallet-token-chain-bot combination.
+// Parameters:
+//   - ctx: Context for request cancellation and timeouts
+//   - conf: Application configuration
+//   - walletAddress: Target wallet address to monitor
+//   - tokenName: Token symbol to check balances for
+//   - chainName: Blockchain network name
+//   - botType: Type of bot logic to use (e.g., "balance_on_chain")
+//   - client: Blockchain client connection
+//
+// Returns:
+//   - func() ([]bot.Task, bot.ProcessType, error): Closure that when executed will:
+//     1. Check current token balance and market conditions
+//     2. Generate appropriate tasks based on the bot's logic
+//     3. Adjust task parameters for balance mode wallets
+//     4. Return tasks ready for execution
 func process(ctx context.Context, conf configs.Config, walletAddress, tokenName, chainName, botType string,
 	client simulated.Client) func() ([]bot.Task, bot.ProcessType, error) {
 	m := bot.GetBot(botType)

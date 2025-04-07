@@ -30,6 +30,20 @@ var (
 	processTasks sync.Map
 )
 
+// Run initializes and manages the market order processing system.
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - conf: Application configuration containing provider and chain settings
+//
+// Returns:
+//   - error: Initialization errors including:
+//   - Task listing failures
+//   - Queue initialization problems
+//
+// The function:
+// 1. Starts background queue processing (once only)
+// 2. Recovers incomplete orders from persistent storage
+// 3. Pushes unfinished tasks back into the processing queue
 func Run(ctx context.Context, conf configs.Config) error {
 	if !hasRunQueue.Load() {
 		go runFromQueue(ctx, conf)
@@ -59,6 +73,16 @@ func Run(ctx context.Context, conf configs.Config) error {
 	return nil
 }
 
+// runFromQueue continuously processes tasks from the market queue.
+// Parameters:
+//   - ctx: Context for cancellation
+//   - conf: Application configuration
+//
+// This background process:
+// 1. Listens for incoming tasks from the global queue
+// 2. Handles panics with automatic restart
+// 3. Processes orders concurrently based on process type
+// 4. Manages task locking to prevent duplicate processing
 func runFromQueue(ctx context.Context, conf configs.Config) {
 	defer func() {
 		if err := recover(); err != nil {
@@ -112,6 +136,18 @@ func runFromQueue(ctx context.Context, conf configs.Config) {
 	}
 }
 
+// do handles individual order processing with status monitoring.
+// Parameters:
+//   - ctx: Parent context for cancellation
+//   - order: Order to process
+//   - conf: Application configuration
+//
+// The function:
+// 1. Creates a monitored sub-context with cancellation
+// 2. Implements periodic order existence checks
+// 3. Delegates to processOrder for core logic
+// 4. Handles error notifications and success alerts
+// 5. Maintains error counters for retry logic
 func do(ctx context.Context, order models.Order, conf configs.Config) {
 	defer utils.Recover()
 	subCtx, cancel := context.WithCancel(ctx)
@@ -182,6 +218,25 @@ func do(ctx context.Context, order models.Order, conf configs.Config) {
 	log.Infof(" order #%d success", order.ID)
 }
 
+// processOrder executes the core order fulfillment logic.
+// Parameters:
+//   - ctx: Context for cancellation
+//   - order: Target order to process
+//   - conf: Application configuration
+//
+// Returns:
+//   - error: Execution errors including:
+//   - Order locking failures
+//   - Balance check errors
+//   - Provider selection errors
+//   - Swap execution failures
+//
+// The function:
+// 1. Acquires order lock
+// 2. Checks wallet balances against thresholds
+// 3. Selects optimal liquidity provider
+// 4. Executes cross-chain swap
+// 5. Updates order status and handles token transfers
 func processOrder(ctx context.Context, order models.Order, conf configs.Config) error {
 	if order.Lock(db.DB()) {
 		return errors.Errorf("order #%d locked, unlock time is %s", order.ID, time.Unix(order.LockTime+60*60*1, 0))
@@ -279,7 +334,22 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 	return nil
 }
 
-// 优化orderby wallet mode
+// generateOrderByWalletMode configures order parameters based on wallet balance mode.
+// Parameters:
+//   - ctx: Context for cancellation
+//   - order: Original order object
+//   - conf: Application configuration
+//
+// Returns:
+//   - models.Order: Modified order with source chain information
+//   - error: Configuration errors including:
+//   - Chain client initialization failures
+//   - Balance check errors
+//
+// For 'balance' mode wallets:
+// 1. Identifies source chains with sufficient balances
+// 2. Configures order for multi-chain sourcing
+// 3. Maintains original order if no modifications needed
 func generateOrderByWalletMode(ctx context.Context, order models.Order, conf configs.Config) (models.Order, error) {
 	if order.TokenInName != "" {
 		return order, nil

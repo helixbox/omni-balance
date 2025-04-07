@@ -25,6 +25,22 @@ func init() {
 	})
 }
 
+// Run coordinates the token price aggregation process from multiple providers.
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - conf: Configuration containing source tokens to monitor
+//
+// Returns:
+//   - error: Aggregation errors including:
+//   - Provider-specific price fetch failures
+//   - Database save failures
+//
+// The function:
+// 1. Initializes synchronization primitives for concurrent execution
+// 2. Iterates through all registered price providers
+// 3. Fetches prices concurrently from each provider
+// 4. Validates and aggregates price data
+// 5. Persists validated prices to the database
 func Run(ctx context.Context, conf configs.Config) error {
 	var (
 		w          sync.WaitGroup

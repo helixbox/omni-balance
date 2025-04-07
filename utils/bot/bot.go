@@ -27,9 +27,31 @@ type Params struct {
 	Client simulated.Client
 }
 
+// Bot defines the core interface for balance monitoring and task generation bots.
+// Implementations should handle specific balance checking logic for different scenarios.
 type Bot interface {
+	// Check verifies current conditions and generates required tasks.
+	// Parameters:
+	//   - ctx: Context for cancellation/timeouts
+	//   - args: Execution parameters including wallet config and chain information
+	// Returns:
+	//   - []Task: List of required balance adjustment tasks
+	//   - ProcessType: Execution strategy (parallel/sequential) for the tasks
+	//   - error: Validation errors or provider communication failures
 	Check(ctx context.Context, args Params) ([]Task, ProcessType, error)
+
+	// Balance retrieves the current token balance for monitoring purposes.
+	// Parameters:
+	//   - ctx: Context for cancellation/timeouts
+	//   - args: Parameters containing wallet and token configuration
+	// Returns:
+	//   - decimal.Decimal: Current token balance
+	//   - error: Balance check failures or chain communication errors
 	Balance(ctx context.Context, args Params) (decimal.Decimal, error)
+
+	// Name returns the unique identifier for this bot implementation.
+	// Returns:
+	//   - string: Machine-readable name used in configuration and logging
 	Name() string
 }
 

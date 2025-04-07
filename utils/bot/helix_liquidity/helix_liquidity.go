@@ -41,6 +41,7 @@ func (b HelixLiquidity) Balance(ctx context.Context, args bot.Params) (decimal.D
 	for _, v := range records {
 		total = total.Add(v.TotalAmount)
 	}
+	log.Debugf("%s %s on %s balance: %s, records: %v", args.Info.Wallet.GetAddress(), args.Info.TokenName, args.Info.Chain, total, records)
 	for _, v := range debtImpl {
 		balance, err := v.BalanceOf(ctx, DebtParams{
 			Address:    args.Info.Wallet.GetAddress(),
@@ -52,6 +53,7 @@ func (b HelixLiquidity) Balance(ctx context.Context, args bot.Params) (decimal.D
 		if err != nil {
 			return decimal.Zero, errors.Wrapf(err, "get %s balance of %s error", token.Name, v.Name())
 		}
+		log.Debugf("%s %s on %s %s balance: %s", args.Info.Wallet.GetAddress(), args.Info.TokenName, args.Info.Chain, v.Name(), balance)
 		total = total.Add(balance)
 	}
 	return total, nil

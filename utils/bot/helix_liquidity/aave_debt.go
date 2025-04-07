@@ -382,9 +382,29 @@ type debtTokens struct {
 	Decimals        int32
 }
 
-type Aave struct {
-}
+// Aave implements debt position management for Aave lending protocol.
+// Handles balance calculations considering both deposited and borrowed amounts.
+type Aave struct{}
 
+// BalanceOf calculates net token balance for a wallet in Aave protocol.
+// Parameters:
+//   - ctx: Context for cancellation/timeouts
+//   - args: DebtParams containing:
+//   - Chain: Blockchain network name (e.g., "arbitrum")
+//   - Token: Token symbol (e.g., "USDC")
+//   - Client: Blockchain client connection
+//   - Address: Wallet address to check
+//   - TokenPrice: Current token price for debt ratio calculations
+//
+// Returns:
+//   - decimal.Decimal: Net available balance (aToken balance - vToken debt)
+//   - error: Chain communication errors or configuration issues
+//
+// Calculation logic:
+// 1. Verifies chain/token configuration support
+// 2. Retrieves aToken (deposit) and vToken (debt) balances
+// 3. Considers available borrow capacity when token price > 1
+// 4. Uses direct balance difference when token price <= 1
 func (a Aave) BalanceOf(ctx context.Context, args DebtParams) (decimal.Decimal, error) {
 	conf, ok := aaveAddressBook[args.Chain]
 	if !ok || conf.Chain == "" || conf.DebtTokens[args.Token].Name == "" {
@@ -402,6 +422,7 @@ func (a Aave) BalanceOf(ctx context.Context, args DebtParams) (decimal.Decimal, 
 	if err != nil {
 		return decimal.Zero, errors.Wrap(err, "get vtoken balance error")
 	}
+	log.Debugf("%s on %s  atokenBalance: %s, vtokenBalance: %s", args.Address, args.Chain, atokenBalance, vtokenBalance)
 	if args.TokenPrice.InexactFloat64() <= 0 {
 		return atokenBalance.Sub(vtokenBalance), nil
 	}
@@ -413,14 +434,22 @@ func (a Aave) BalanceOf(ctx context.Context, args DebtParams) (decimal.Decimal, 
 	if err != nil {
 		return decimal.Zero, errors.Wrap(err, "get user account data error")
 	}
-	if user.AvailableBorrowsBase.Int64() <= 0 || args.TokenPrice.Equal(decimal.RequireFromString("1")) {
+	if user.AvailableBorrowsBase.Int64() <= 0 || user.TotalDebtBase.Int64() <= 0 {
 		return atokenBalance.Sub(vtokenBalance), nil
 	}
-	AvailableBorrowsBalance := chains.WeiToEth(user.AvailableBorrowsBase, 8)
-	return AvailableBorrowsBalance.Div(args.TokenPrice), nil
 
+	AvailableBorrowsBalance := chains.WeiToEth(user.AvailableBorrowsBase, 8)
+	log.Debugf("%s on %s availableBorrowsBalance: %s", args.Address, args.Chain, AvailableBorrowsBalance)
+	if args.TokenPrice.String() == "1" &&
+		atokenBalance.GreaterThanOrEqual(AvailableBorrowsBalance) {
+		return atokenBalance.Sub(vtokenBalance), nil
+	}
+	return AvailableBorrowsBalance.Div(args.TokenPrice), nil
 }
 
+// Name identifies the Aave debt provider implementation.
+// Returns:
+//   - string: Constant provider name "aave" used in configuration and logging
 func (a Aave) Name() string {
 	return "aave"
 }
