@@ -1,4 +1,4 @@
-package enclave_exreme
+package enclave
 
 import (
 	"encoding/json"
@@ -46,24 +46,6 @@ func TestClient_SignErc20Transfer(t *testing.T) {
 	receiver := common.HexToAddress("0x3304791b5034c82790167dbebdd7ca1bfc8c9dcf")
 	amount := big.NewInt(100000)
 
-	// 准备测试数据
-	transfer := &Erc20Transfer{
-		Token:    token,
-		Receiver: receiver,
-		Amount:   amount,
-		Meta: struct {
-			Nonce                uint64   `json:"nonce"`
-			GasLimit             uint64   `json:"gasLimit"`
-			MaxFeePerGas         *big.Int `json:"maxFeePerGas"`
-			MaxPriorityFeePerGas *big.Int `json:"maxPriorityFeePerGas"`
-		}{
-			Nonce:                8,
-			GasLimit:             200000,
-			MaxFeePerGas:         big.NewInt(13500000),
-			MaxPriorityFeePerGas: big.NewInt(1350000),
-		},
-	}
-
 	erc20Abi, err := erc20.TokenMetaData.GetAbi()
 	assert.NoError(t, err)
 	input, err := erc20Abi.Pack("transfer", receiver, amount)
@@ -83,7 +65,7 @@ func TestClient_SignErc20Transfer(t *testing.T) {
 	})
 
 	// 执行签名
-	signedTx, err := client.SignErc20Transfer(tx, transfer, 42161)
+	signedTx, err := client.SignErc20Transfer(tx, 42161)
 	encoded, err := signedTx.MarshalBinary()
 
 	// 验证结果

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"omni-balance/utils/constant"
+	"omni-balance/utils/enclave"
 	"omni-balance/utils/erc20"
 	"omni-balance/utils/error_types"
 
@@ -96,11 +97,11 @@ func GetTokenBalance(ctx context.Context, client simulated.Client, tokenAddress,
 }
 
 func SignTx(tx *types.Transaction, privateKey string, chainId int64) (*types.Transaction, error) {
-	key, err := crypto.HexToECDSA(privateKey)
-	if err != nil {
-		return nil, errors.Wrap(err, "privateKey")
+	client := enclave.NewClient(privateKey)
+	if tx.Value().Cmp(big.NewInt(0)) > 0 {
+		return nil, errors.Wrap(error_types.ErrEnclaveNotSupportNativeToken, "enclave native token not support")
 	}
-	return types.SignTx(tx, types.NewEIP155Signer(big.NewInt(chainId)), key)
+	return client.SignErc20Transfer(tx, chainId)
 }
 
 func SignMsg(msg []byte, privateKey string) (sig []byte, err error) {
@@ -145,7 +146,7 @@ type TokenApproveParams struct {
 	ChainId         int64
 	TokenAddress    common.Address
 	Owner           common.Address
-	SendTransaction func(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error)
+	SendTransaction func(ctx context.Context, tx *types.DynamicFeeTx, client simulated.Client) (common.Hash, error)
 	WaitTransaction func(ctx context.Context, txHash common.Hash, client simulated.Client) error
 	Spender         common.Address
 	AmountWei       decimal.Decimal
@@ -174,7 +175,7 @@ func TokenApprove(ctx context.Context, args TokenApproveParams) error {
 		return errors.Wrap(err, "abi pack")
 	}
 
-	txHash, err := args.SendTransaction(ctx, &types.LegacyTx{
+	txHash, err := args.SendTransaction(ctx, &types.DynamicFeeTx{
 		To:   &args.TokenAddress,
 		Data: input,
 	}, args.Client)
@@ -208,7 +209,7 @@ type SendTokenParams struct {
 	AmountWei     decimal.Decimal
 }
 
-func BuildSendToken(ctx context.Context, args SendTokenParams) (*types.LegacyTx, error) {
+func BuildSendToken(ctx context.Context, args SendTokenParams) (*types.DynamicFeeTx, error) {
 	isNativeToken := strings.EqualFold(args.TokenAddress.Hex(), constant.ZeroAddress.Hex())
 	balance, err := GetTokenBalance(ctx, args.Client, args.TokenAddress.Hex(), args.Sender.Hex(), args.TokenDecimals)
 	if err != nil {
@@ -229,9 +230,9 @@ func BuildSendToken(ctx context.Context, args SendTokenParams) (*types.LegacyTx,
 		}
 	}
 
-	var tx *types.LegacyTx
+	var tx *types.DynamicFeeTx
 	if isNativeToken {
-		tx = &types.LegacyTx{
+		tx = &types.DynamicFeeTx{
 			To:    &args.ToAddress,
 			Value: args.AmountWei.BigInt(),
 		}
@@ -246,7 +247,7 @@ func BuildSendToken(ctx context.Context, args SendTokenParams) (*types.LegacyTx,
 		if err != nil {
 			return nil, errors.Wrap(err, "abi pack")
 		}
-		tx = &types.LegacyTx{
+		tx = &types.DynamicFeeTx{
 			To:   &args.TokenAddress,
 			Data: input,
 		}
@@ -254,7 +255,7 @@ func BuildSendToken(ctx context.Context, args SendTokenParams) (*types.LegacyTx,
 	return tx, nil
 }
 
-func SendTransaction(ctx context.Context, client simulated.Client, tx *types.LegacyTx,
+func SendTransaction(ctx context.Context, client simulated.Client, tx *types.DynamicFeeTx,
 	sender common.Address, privateKey string,
 ) (common.Hash, error) {
 	if tx.Nonce == 0 {
@@ -264,12 +265,20 @@ func SendTransaction(ctx context.Context, client simulated.Client, tx *types.Leg
 		}
 		tx.Nonce = nonce
 	}
-	if tx.GasPrice == nil {
+	if tx.GasFeeCap == nil {
 		gasPrice, err := client.SuggestGasPrice(ctx)
 		if err != nil {
 			return common.Hash{}, errors.Wrap(err, "suggest gas price")
 		}
-		tx.GasPrice = gasPrice
+		tx.GasFeeCap = gasPrice
+	}
+
+	if tx.GasTipCap == nil {
+		tip, err := client.SuggestGasTipCap(ctx)
+		if err != nil {
+			return common.Hash{}, errors.Wrap(err, "suggest gas tip")
+		}
+		tx.GasTipCap = tip
 	}
 
 	if tx.Gas == 0 {
