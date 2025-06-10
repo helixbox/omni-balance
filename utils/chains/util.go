@@ -2,13 +2,13 @@ package chains
 
 import (
 	"context"
-
 	"math/big"
+	"strings"
+	"time"
+
 	"omni-balance/utils/constant"
 	"omni-balance/utils/erc20"
 	"omni-balance/utils/error_types"
-	"strings"
-	"time"
 
 	log "omni-balance/utils/logging"
 
@@ -48,8 +48,8 @@ func WeiToEth(v *big.Int, decimals ...int32) decimal.Decimal {
 // tokenDecimal: Optional argument specifying the number of decimal places for the token. Required and must not be zero when querying the native token balance.
 // Returns the token balance in its smallest unit and an error if any occurs.
 func GetTokenBalance(ctx context.Context, client simulated.Client, tokenAddress, walletAddress string,
-	tokenDecimal ...interface{}) (decimal.Decimal, error) {
-
+	tokenDecimal ...interface{},
+) (decimal.Decimal, error) {
 	var (
 		balance *big.Int
 		err     error
@@ -209,9 +209,7 @@ type SendTokenParams struct {
 }
 
 func BuildSendToken(ctx context.Context, args SendTokenParams) (*types.LegacyTx, error) {
-	var (
-		isNativeToken = strings.EqualFold(args.TokenAddress.Hex(), constant.ZeroAddress.Hex())
-	)
+	isNativeToken := strings.EqualFold(args.TokenAddress.Hex(), constant.ZeroAddress.Hex())
 	balance, err := GetTokenBalance(ctx, args.Client, args.TokenAddress.Hex(), args.Sender.Hex(), args.TokenDecimals)
 	if err != nil {
 		return nil, errors.Wrap(err, "get balance")
@@ -257,7 +255,8 @@ func BuildSendToken(ctx context.Context, args SendTokenParams) (*types.LegacyTx,
 }
 
 func SendTransaction(ctx context.Context, client simulated.Client, tx *types.LegacyTx,
-	sender common.Address, privateKey string) (common.Hash, error) {
+	sender common.Address, privateKey string,
+) (common.Hash, error) {
 	if tx.Nonce == 0 {
 		nonce, err := client.NonceAt(ctx, sender, nil)
 		if err != nil {

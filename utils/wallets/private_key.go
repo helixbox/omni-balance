@@ -7,15 +7,12 @@ import (
 	"omni-balance/utils/chains"
 	"omni-balance/utils/constant"
 	"omni-balance/utils/erc20"
-	"omni-balance/utils/error_types"
 	"omni-balance/utils/locks"
-	"strings"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
@@ -48,30 +45,21 @@ func NewPrivateKeyWallet(conf WalletConfig) *PrivateKeyWallet {
 	if p.conf.Operator.Operator.Cmp(constant.ZeroAddress) != 0 && p.conf.Operator.PrivateKey == "" {
 		log.Fatalln("operator.privateKey can not be empty when operator.address is not empty")
 	}
-	checkKey := func(privateKey string, address common.Address) error {
-		key, err := crypto.HexToECDSA(privateKey)
-		if err != nil {
-			return errors.Wrap(err, "crypto.HexToECDSA")
-		}
-		if !strings.EqualFold(address.Hex(), crypto.PubkeyToAddress(key.PublicKey).Hex()) {
-			return error_types.ErrPrivateKeyNotMatch
-		}
-		return nil
-	}
 
-	if conf.Operator.Address.Cmp(constant.ZeroAddress) == 0 && conf.PrivateKey != "" && checkKey(conf.PrivateKey, conf.Address) != nil {
+	if conf.Operator.Address.Cmp(constant.ZeroAddress) == 0 && conf.PrivateKey != "" {
 		log.Fatalln("privateKey not match address")
 	}
 
 	if conf.Operator.Address.Cmp(constant.ZeroAddress) != 0 &&
 		conf.Operator.Operator.Cmp(constant.ZeroAddress) == 0 &&
-		conf.PrivateKey != "" && checkKey(conf.PrivateKey, conf.Operator.Address) != nil {
+		conf.PrivateKey != "" {
+		// TODO:
 		log.Fatalln("privateKey not match operator address")
 	}
 
 	if conf.Operator.Address.Cmp(constant.ZeroAddress) != 0 &&
 		conf.Operator.Operator.Cmp(constant.ZeroAddress) != 0 &&
-		conf.PrivateKey != "" && checkKey(conf.PrivateKey, conf.Operator.Operator) != nil {
+		conf.PrivateKey != "" {
 		log.Fatalln("privateKey not match operator address")
 	}
 	return p
