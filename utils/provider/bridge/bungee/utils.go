@@ -63,7 +63,7 @@ func (r Bungee) Quote(ctx context.Context, args QuoteParams) (gjson.Result, erro
 	return result, nil
 }
 
-func (r Bungee) BuildTx(ctx context.Context, quote gjson.Result, sender, receiver common.Address) (*types.LegacyTx, error) {
+func (r Bungee) BuildTx(ctx context.Context, quote gjson.Result, sender, receiver common.Address) (*types.DynamicFeeTx, error) {
 	var router = make(map[string]interface{})
 	if err := json.Unmarshal([]byte(quote.Raw), &router); err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func (r Bungee) BuildTx(ctx context.Context, quote gjson.Result, sender, receive
 	value := big.NewInt(0)
 	value.SetString(txTarget, 16)
 	to := common.HexToAddress(txTarget)
-	return &types.LegacyTx{
+	return &types.DynamicFeeTx{
 		To:    &to,
 		Value: value,
 		Data:  common.Hex2Bytes(strings.TrimPrefix(txData, "0x")),

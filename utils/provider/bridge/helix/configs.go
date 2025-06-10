@@ -2,17 +2,18 @@ package helix
 
 import (
 	"context"
+	"omni-balance/utils/chains"
+	"omni-balance/utils/configs"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"omni-balance/utils/chains"
-	"omni-balance/utils/configs"
 )
 
 type Transfer interface {
-	Do(ctx context.Context, opts TransferOptions) (tx *types.LegacyTx, err error)
+	Do(ctx context.Context, opts TransferOptions) (tx *types.DynamicFeeTx, err error)
 }
 
 type Options struct {

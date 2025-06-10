@@ -2,15 +2,16 @@ package helix
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
 	"math/big"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/provider/bridge/helix/abi_v3"
 	"strings"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 )
 
 type V3 struct {
@@ -40,7 +41,7 @@ func (v *V3) getContract(sourceChain, targetChain string) (sourceAddress common.
 	return
 }
 
-func (v *V3) Do(_ context.Context, opts TransferOptions) (tx *types.LegacyTx, err error) {
+func (v *V3) Do(_ context.Context, opts TransferOptions) (tx *types.DynamicFeeTx, err error) {
 	var (
 		sourceContractAddress, _ = v.getContract(v.opts.SourceChain, v.opts.TargetChain)
 		targetChain              = v.opts.Config.GetChainConfig(v.opts.TargetChain)
@@ -66,7 +67,7 @@ func (v *V3) Do(_ context.Context, opts TransferOptions) (tx *types.LegacyTx, er
 		return nil, errors.Wrap(err, "lockAndRemoteRelease")
 	}
 
-	a := &types.LegacyTx{
+	a := &types.DynamicFeeTx{
 		To:    &sourceContractAddress,
 		Value: amount.Add(opts.TotalFee).BigInt(),
 		Data:  data,

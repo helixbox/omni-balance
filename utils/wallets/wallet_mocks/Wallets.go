@@ -251,7 +251,7 @@ func (_m *Wallets) MarshalJSON() ([]byte, error) {
 }
 
 // SendTransaction provides a mock function with given fields: ctx, tx, client
-func (_m *Wallets) SendTransaction(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
+func (_m *Wallets) SendTransaction(ctx context.Context, tx *types.DynamicFeeTx, client simulated.Client) (common.Hash, error) {
 	ret := _m.Called(ctx, tx, client)
 
 	if len(ret) == 0 {
@@ -260,10 +260,10 @@ func (_m *Wallets) SendTransaction(ctx context.Context, tx *types.LegacyTx, clie
 
 	var r0 common.Hash
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *types.LegacyTx, simulated.Client) (common.Hash, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *types.DynamicFeeTx, simulated.Client) (common.Hash, error)); ok {
 		return rf(ctx, tx, client)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *types.LegacyTx, simulated.Client) common.Hash); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *types.DynamicFeeTx, simulated.Client) common.Hash); ok {
 		r0 = rf(ctx, tx, client)
 	} else {
 		if ret.Get(0) != nil {
@@ -271,7 +271,7 @@ func (_m *Wallets) SendTransaction(ctx context.Context, tx *types.LegacyTx, clie
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *types.LegacyTx, simulated.Client) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, *types.DynamicFeeTx, simulated.Client) error); ok {
 		r1 = rf(ctx, tx, client)
 	} else {
 		r1 = ret.Error(1)

@@ -229,7 +229,7 @@ func (r Routernitro) Swap(ctx context.Context, args provider.SwapParams) (provid
 		}
 		sr.SetOrder(buildTx)
 		args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusPending).Out())
-		txHash, err := args.Sender.SendTransaction(ctx, &types.LegacyTx{
+		txHash, err := args.Sender.SendTransaction(ctx, &types.DynamicFeeTx{
 			To:    &buildTx.Txn.To,
 			Value: value.BigInt(),
 			Data:  common.Hex2Bytes(strings.TrimPrefix(buildTx.Txn.Data, "0x")),

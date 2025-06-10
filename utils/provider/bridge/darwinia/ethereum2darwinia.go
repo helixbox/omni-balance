@@ -43,7 +43,7 @@ var (
 	}
 )
 
-func Ethereum2darwinia(ctx context.Context, args SwapParams) (tx *types.LegacyTx, err error) {
+func Ethereum2darwinia(ctx context.Context, args SwapParams) (tx *types.DynamicFeeTx, err error) {
 
 	var (
 		wallet     = args.Sender
@@ -95,7 +95,7 @@ func Ethereum2darwinia(ctx context.Context, args SwapParams) (tx *types.LegacyTx
 	}
 
 	if args.OnlyFee {
-		return &types.LegacyTx{
+		return &types.DynamicFeeTx{
 			Value: fee.BigInt(),
 		}, nil
 	}
@@ -113,7 +113,7 @@ func Ethereum2darwinia(ctx context.Context, args SwapParams) (tx *types.LegacyTx
 		return nil, errors.Wrap(err, "XTokenBurnAndXUnlock")
 	}
 	// remoteAppAddress
-	return &types.LegacyTx{
+	return &types.DynamicFeeTx{
 		To:    &contractAddress,
 		Value: fee.BigInt(),
 		Data:  data,

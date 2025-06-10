@@ -2,13 +2,14 @@ package helix
 
 import (
 	"context"
+	"math/big"
+	"omni-balance/utils/chains"
+	"omni-balance/utils/provider/bridge/helix/abi_v2_opposite"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
-	"math/big"
-	"omni-balance/utils/chains"
-	"omni-balance/utils/provider/bridge/helix/abi_v2_opposite"
 )
 
 type V2Opposite struct {
@@ -23,7 +24,7 @@ func (v2 *V2Opposite) getContract(_, _ string) (common.Address, common.Address) 
 	return common.HexToAddress("0x48d769d5C7ff75703cDd1543A1a2ed9bC9044A23"), common.HexToAddress("0x48d769d5C7ff75703cDd1543A1a2ed9bC9044A23")
 }
 
-func (v2 *V2Opposite) Do(_ context.Context, opts TransferOptions) (tx *types.LegacyTx, err error) {
+func (v2 *V2Opposite) Do(_ context.Context, opts TransferOptions) (tx *types.DynamicFeeTx, err error) {
 	var (
 		sourceContractAddress, _ = v2.getContract(v2.opts.SourceChain, v2.opts.TargetChain)
 		targetChain              = v2.opts.Config.GetChainConfig(v2.opts.TargetChain)
@@ -48,7 +49,7 @@ func (v2 *V2Opposite) Do(_ context.Context, opts TransferOptions) (tx *types.Leg
 		return nil, errors.Wrap(err, "transferAndLockMargin")
 	}
 
-	a := &types.LegacyTx{
+	a := &types.DynamicFeeTx{
 		To:    &sourceContractAddress,
 		Value: amount.Add(opts.TotalFee).BigInt(),
 		Data:  data,

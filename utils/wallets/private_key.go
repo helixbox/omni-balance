@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+
 	"omni-balance/utils/chains"
 	"omni-balance/utils/constant"
 	"omni-balance/utils/erc20"
@@ -103,17 +104,20 @@ func (p *PrivateKeyWallet) CheckFullAccess(_ context.Context) error {
 }
 
 func (p *PrivateKeyWallet) GetExternalBalance(ctx context.Context, tokenAddress common.Address, decimals int32,
-	client simulated.Client) (decimal.Decimal, error) {
+	client simulated.Client,
+) (decimal.Decimal, error) {
 	return p.balanceOf(ctx, p.GetAddress(), tokenAddress, decimals, client)
 }
 
 func (p *PrivateKeyWallet) GetBalance(ctx context.Context, tokenAddress common.Address, decimals int32,
-	client simulated.Client) (decimal.Decimal, error) {
+	client simulated.Client,
+) (decimal.Decimal, error) {
 	return p.balanceOf(ctx, p.GetAddress(true), tokenAddress, decimals, client)
 }
 
 func (p *PrivateKeyWallet) balanceOf(ctx context.Context, wallet, tokenAddress common.Address, decimals int32,
-	client simulated.Client) (decimal.Decimal, error) {
+	client simulated.Client,
+) (decimal.Decimal, error) {
 	if tokenAddress.Cmp(constant.ZeroAddress) == 0 {
 		balance, err := client.BalanceAt(ctx, wallet, nil)
 		if err != nil {
@@ -143,14 +147,23 @@ func (p *PrivateKeyWallet) getPrivateKey() string {
 	return p.conf.PrivateKey
 }
 
-func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.LegacyTx,
-	client simulated.Client) (common.Hash, error) {
-	if tx.GasPrice == nil {
+func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.DynamicFeeTx,
+	client simulated.Client,
+) (common.Hash, error) {
+	if tx.GasFeeCap == nil {
 		gasPrice, err := client.SuggestGasPrice(ctx)
 		if err != nil {
-			return common.Hash{}, errors.Wrap(err, "get suggest gas")
+			return common.Hash{}, errors.Wrap(err, "suggest gas price")
 		}
-		tx.GasPrice = gasPrice
+		tx.GasFeeCap = gasPrice
+	}
+
+	if tx.GasTipCap == nil {
+		tip, err := client.SuggestGasTipCap(ctx)
+		if err != nil {
+			return common.Hash{}, errors.Wrap(err, "suggest gas tip")
+		}
+		tx.GasTipCap = tip
 	}
 	if tx.Gas == 0 {
 		gas, err := client.EstimateGas(ctx, ethereum.CallMsg{
@@ -195,6 +208,7 @@ func (p *PrivateKeyWallet) WaitTransaction(ctx context.Context, txHash common.Ha
 func (p *PrivateKeyWallet) SignRawMessage(msg []byte) (sig []byte, err error) {
 	return chains.SignMsg(msg, p.conf.PrivateKey)
 }
+
 func (p *PrivateKeyWallet) GetRealHash(_ context.Context, txHash common.Hash, _ simulated.Client) (common.Hash, error) {
 	return txHash, nil
 }

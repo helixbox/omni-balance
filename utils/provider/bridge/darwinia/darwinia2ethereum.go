@@ -41,7 +41,7 @@ var (
 	}
 )
 
-func Darwinia2ethereum(ctx context.Context, args SwapParams) (tx *types.LegacyTx, err error) {
+func Darwinia2ethereum(ctx context.Context, args SwapParams) (tx *types.DynamicFeeTx, err error) {
 	tokenConf := darwinia2ethereum[strings.ToUpper(args.TokenName)]
 	if tokenConf.sourceChainId == 0 {
 		return nil, errors.Errorf("not support token %s", args.TokenName)
@@ -88,7 +88,7 @@ func Darwinia2ethereum(ctx context.Context, args SwapParams) (tx *types.LegacyTx
 	}
 
 	if args.OnlyFee {
-		return &types.LegacyTx{
+		return &types.DynamicFeeTx{
 			Value: fee.BigInt(),
 		}, nil
 	}
@@ -110,7 +110,7 @@ func Darwinia2ethereum(ctx context.Context, args SwapParams) (tx *types.LegacyTx
 	if strings.EqualFold(contractAddress.Hex(), realWallet.Hex()) {
 		contractAddress = tokenConf.remoteAppAddress
 	}
-	a := &types.LegacyTx{
+	a := &types.DynamicFeeTx{
 		To:    &contractAddress,
 		Value: args.Amount.Add(fee).BigInt(),
 		Data:  data,

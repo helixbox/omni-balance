@@ -2,12 +2,13 @@ package darwinia
 
 import (
 	"context"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"strings"
 )
 
-type SwapFunc func(ctx context.Context, args SwapParams) (tx *types.LegacyTx, err error)
+type SwapFunc func(ctx context.Context, args SwapParams) (tx *types.DynamicFeeTx, err error)
 
 var (
 	SUPPORT_TOKENS = []supportToken{
@@ -22,7 +23,7 @@ var (
 
 type supportToken struct {
 	Config map[string]Params
-	Fn     func(ctx context.Context, args SwapParams) (tx *types.LegacyTx, err error)
+	Fn     func(ctx context.Context, args SwapParams) (tx *types.DynamicFeeTx, err error)
 }
 
 type Params struct {

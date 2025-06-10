@@ -122,7 +122,7 @@ func (s *Dsafe) GetNonce(ctx context.Context, client simulated.Client) (uint64, 
 	return client.NonceAt(ctx, s.GetAddress(), nil)
 }
 
-func (s *Dsafe) SendTransaction(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
+func (s *Dsafe) SendTransaction(ctx context.Context, tx *types.DynamicFeeTx, client simulated.Client) (common.Hash, error) {
 	return s.MultisigTransaction(ctx, tx, client)
 }
 

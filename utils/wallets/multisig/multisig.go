@@ -99,7 +99,7 @@ func (m Multisig) GetNonce(ctx context.Context, client simulated.Client) (uint64
 	return m.getRealInstance(ctx).GetNonce(ctx, client)
 }
 
-func (m Multisig) SendTransaction(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
+func (m Multisig) SendTransaction(ctx context.Context, tx *types.DynamicFeeTx, client simulated.Client) (common.Hash, error) {
 	return m.getRealInstance(ctx).SendTransaction(ctx, tx, client)
 }
 
