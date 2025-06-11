@@ -24,7 +24,7 @@ type SignRequest struct {
 type Erc20Transfer struct {
 	Token    common.Address `json:"token"`
 	Receiver common.Address `json:"receiver"`
-	Amount   *big.Int       `json:"acmount"`
+	Amount   *big.Int       `json:"amount"`
 	Meta     Meta           `json:"meta"`
 }
 
@@ -38,7 +38,7 @@ type Meta struct {
 // SignResponse 定义签名服务响应的结构
 type SignResponse struct {
 	// TODO: 根据实际签名服务的响应格式定义
-	Signature string `json:"signature"`
+	Signature string `json:"result"`
 }
 
 // Client 签名服务客户端
@@ -123,6 +123,10 @@ func (c *Client) SignErc20Transfer(tx *types.Transaction, chainID int64) (*types
 	var signResp SignResponse
 	if err := json.Unmarshal(body, &signResp); err != nil {
 		return nil, errors.WithStack(err)
+	}
+
+	if signResp.Signature == "" {
+		return nil, errors.New("enclave not approved")
 	}
 
 	signer := types.NewLondonSigner(big.NewInt(chainID))

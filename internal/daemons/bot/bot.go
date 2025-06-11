@@ -3,13 +3,14 @@ package bot
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"omni-balance/internal/daemons/market"
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
 	"omni-balance/utils/bot"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
-	"sync"
 
 	log "omni-balance/utils/logging"
 
@@ -38,9 +39,7 @@ func Run(ctx context.Context, conf configs.Config) error {
 	if err != nil {
 		return errors.Wrap(err, "find buy tokens error")
 	}
-	var (
-		clients = make(map[string]simulated.Client)
-	)
+	clients := make(map[string]simulated.Client)
 	for _, chain := range conf.Chains {
 		client, err := chains.NewTryClient(ctx, chain.RpcEndpoints)
 		if err != nil {
@@ -65,7 +64,7 @@ func Run(ctx context.Context, conf configs.Config) error {
 				if ignoreTokens.Contains(token.Name, chainName, wallet.Address) {
 					continue
 				}
-				var botTypes = conf.ListBotNames(wallet.Address, chainName, token.Name)
+				botTypes := conf.ListBotNames(wallet.Address, chainName, token.Name)
 				if len(botTypes) == 0 {
 					botTypes = append(botTypes, "balance_on_chain")
 				}
@@ -122,7 +121,8 @@ func Run(ctx context.Context, conf configs.Config) error {
 //     3. Adjust task parameters for balance mode wallets
 //     4. Return tasks ready for execution
 func process(ctx context.Context, conf configs.Config, walletAddress, tokenName, chainName, botType string,
-	client simulated.Client) func() ([]bot.Task, bot.ProcessType, error) {
+	client simulated.Client,
+) func() ([]bot.Task, bot.ProcessType, error) {
 	m := bot.GetBot(botType)
 	if m == nil {
 		panic(fmt.Sprintf("%s botType not found", botType))
@@ -160,7 +160,7 @@ func process(ctx context.Context, conf configs.Config, walletAddress, tokenName,
 			if !walletConf.Mode.IsBalance() {
 				continue
 			}
-			var t = new(bot.Task)
+			t := new(bot.Task)
 			if err := copier.Copy(t, &task); err != nil {
 				return nil, bot.Parallel, err
 			}

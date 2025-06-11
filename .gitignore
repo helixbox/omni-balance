@@ -11,3 +11,4 @@ start.sh
 .DS_Store
 omni-balance
 config.yaml
+config_local.yaml

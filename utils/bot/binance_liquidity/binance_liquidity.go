@@ -3,10 +3,11 @@ package binance_liquidity
 import (
 	"context"
 	"encoding/json"
+	"strings"
+
 	"omni-balance/utils/bot"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/constant"
-	"strings"
 
 	log "omni-balance/utils/logging"
 
@@ -41,6 +42,7 @@ func (b BinanceLiquidity) GetClient(config configs.Config) (*binance_connector.C
 		return nil, err
 	}
 	client := binance_connector.NewClient(c.Key, c.Secret)
+	// client.Debug = true
 	return client, nil
 }
 
@@ -64,14 +66,12 @@ func (b BinanceLiquidity) Balance(ctx context.Context, args bot.Params) (decimal
 
 func (b BinanceLiquidity) Check(ctx context.Context, args bot.Params) ([]bot.Task, bot.ProcessType, error) {
 	botConfigRaw := args.Conf.GetBotConfigUnderWallet(args.Info.Wallet.GetAddress().Hex(), b.Name())
-	var (
-		botConfig = struct {
-			// tokenName: chainName
-			OnlyWayTokens map[string]string `json:"onlyOneWayTokens" yaml:"onlyOneWayTokens" help:"Only way tokens"`
-			// sourceToken: targetToken
-			ChangeTokens map[string]string `json:"changeTokens" yaml:"changeTokens" help:"Change tokens"`
-		}{}
-	)
+	botConfig := struct {
+		// tokenName: chainName
+		OnlyWayTokens map[string]string `json:"onlyOneWayTokens" yaml:"onlyOneWayTokens" help:"Only way tokens"`
+		// sourceToken: targetToken
+		ChangeTokens map[string]string `json:"changeTokens" yaml:"changeTokens" help:"Change tokens"`
+	}{}
 	if botConfigRaw != nil {
 		data, _ := json.Marshal(botConfigRaw)
 		_ = json.Unmarshal(data, &botConfig)
@@ -173,7 +173,7 @@ func (b BinanceLiquidity) Check(ctx context.Context, args bot.Params) ([]bot.Tas
 	if tokenInChainConfig.Name == "" || len(tokenInChainConfig.RpcEndpoints) == 0 {
 		return nil, bot.Queue, errors.Errorf("token %s chain %s config not found", args.Info.TokenName, chainName)
 	}
-	var tokenInName = args.Info.TokenName
+	tokenInName := args.Info.TokenName
 	if len(botConfig.ChangeTokens) != 0 && botConfig.ChangeTokens[args.Info.TokenName] != "" {
 		tokenInName = botConfig.ChangeTokens[args.Info.TokenName]
 	}

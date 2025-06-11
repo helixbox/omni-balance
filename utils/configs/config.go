@@ -3,11 +3,12 @@ package configs
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
+
 	"omni-balance/utils"
 	"omni-balance/utils/constant"
 	"omni-balance/utils/wallets"
-	"strings"
-	"time"
 
 	log "omni-balance/utils/logging"
 
@@ -18,9 +19,11 @@ import (
 )
 
 // ProviderType liquidity providersMap type
-type ProviderType string
-type DbType string
-type Mode string
+type (
+	ProviderType string
+	DbType       string
+	Mode         string
+)
 
 const (
 	// CEX centralized exchange
@@ -48,9 +51,11 @@ const (
 func (m Mode) String() string {
 	return string(m)
 }
+
 func (m Mode) IsBalance() bool {
 	return m == Balance
 }
+
 func (m Mode) IsSwap() bool {
 	return m == Swap
 }
@@ -110,11 +115,9 @@ type Wallet struct {
 
 type BotConfigs map[string]interface{}
 
-var (
-	needBotConfigs = map[string]bool{
-		"gate_liquidity": true,
-	}
-)
+var needBotConfigs = map[string]bool{
+	"gate_liquidity": true,
+}
 
 type BotConfig struct {
 	// The name of the monitoring bot, default: "balance_on_chain", supports: "balance_on_chain", "helix_liquidity", and "gate_liquidity".
@@ -297,9 +300,7 @@ func (c *Config) Init() *Config {
 			}
 		}
 		for index, t := range v.Tokens {
-			var (
-				chains []string
-			)
+			var chains []string
 			for _, v := range t.Chains {
 				if newName, ok := oldName2NewName[v]; ok {
 					chains = append(chains, newName)

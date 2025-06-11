@@ -2,14 +2,15 @@ package cross_chain
 
 import (
 	"context"
+	"sync"
+	"time"
+
 	"omni-balance/internal/daemons"
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
 	"omni-balance/utils"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/provider"
-	"sync"
-	"time"
 
 	log "omni-balance/utils/logging"
 
@@ -162,9 +163,7 @@ func createUpdateLog(order *models.Order, result provider.SwapResult) map[string
 // 2. Checks cost feasibility for each provider
 // 3. Selects first compatible bridge
 func getBridge(ctx context.Context, order *models.Order, conf configs.Config) (provider.Provider, error) {
-	var (
-		bridges []provider.Provider
-	)
+	var bridges []provider.Provider
 	for _, providerInitFunc := range provider.LiquidityProviderTypeAndConf(configs.Bridge, conf) {
 		bridge, err := provider.Init(providerInitFunc, conf)
 		if err != nil {
