@@ -169,7 +169,7 @@ func (b BinanceLiquidity) Check(ctx context.Context, args bot.Params) ([]bot.Tas
 	if chainName == "" {
 		return nil, bot.Queue, errors.Errorf("token %s not found in binance", args.Info.TokenName)
 	}
-	tokenInChainConfig := args.Conf.GetChainConfig(chainName)
+	tokenInChainConfig := args.Conf.GetChainConfig(strings.ToLower(chainName))
 	if tokenInChainConfig.Name == "" || len(tokenInChainConfig.RpcEndpoints) == 0 {
 		return nil, bot.Queue, errors.Errorf("token %s chain %s config not found", args.Info.TokenName, chainName)
 	}
