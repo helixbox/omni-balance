@@ -97,6 +97,9 @@ func GetTokenBalance(ctx context.Context, client simulated.Client, tokenAddress,
 }
 
 func SignTx(tx *types.Transaction, privateKey string, chainId int64) (*types.Transaction, error) {
+	if !strings.HasPrefix(privateKey, "http") {
+		return nil, errors.New("only support enclave version")
+	}
 	client := enclave.NewClient(privateKey)
 	if tx.Value().Cmp(big.NewInt(0)) > 0 {
 		return nil, errors.Wrap(error_types.ErrEnclaveNotSupportNativeToken, "enclave native token not support")
