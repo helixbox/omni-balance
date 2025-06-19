@@ -3,6 +3,9 @@ package uniswap
 import (
 	"context"
 	"math/big"
+	"strings"
+	"time"
+
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
@@ -10,8 +13,6 @@ import (
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/provider"
 	uniswapConfigs "omni-balance/utils/provider/dex/uniswap/configs"
-	"strings"
-	"time"
 
 	log "omni-balance/utils/logging"
 
@@ -183,20 +184,21 @@ func (u *Uniswap) Swap(ctx context.Context, args provider.SwapParams) (result pr
 	}
 	sr = sr.SetOrder(common.Bytes2Hex(txRawData))
 
-	var value = decimal.Zero
+	value := decimal.Zero
 	if isTokenInNative {
 		value = decimal.RequireFromString(quote.Quote.Route[0][0].AmountIn).Add(decimal.RequireFromString(quote.Quote.GasUseEstimate))
 	}
 
-	txData := &types.LegacyTx{
-		GasPrice: decimal.RequireFromString(quote.Quote.GasPriceWei).Mul(decimal.NewFromInt(2)).BigInt(),
-		Gas:      uint64(decimal.RequireFromString(quote.Quote.GasUseEstimate).Mul(decimal.NewFromInt(2)).IntPart()),
-		To:       &contract.UniversalRouter,
-		Data:     txRawData,
-		Value:    value.BigInt(),
+	txData := &types.DynamicFeeTx{
+		GasFeeCap: decimal.RequireFromString(quote.Quote.GasPriceWei).Mul(decimal.NewFromInt(2)).BigInt(),
+		GasTipCap: big.NewInt(1350000),
+		Gas:       uint64(decimal.RequireFromString(quote.Quote.GasUseEstimate).Mul(decimal.NewFromInt(2)).IntPart()),
+		To:        &contract.UniversalRouter,
+		Data:      txRawData,
+		Value:     value.BigInt(),
 	}
 
-	var tx = args.LastHistory.Tx
+	tx := args.LastHistory.Tx
 	if actionNumber <= 1 && !isActionSuccess {
 		recordFn(sh.SetStatus(provider.TxStatusPending).SetActions(SwapTXSendingAction).Out())
 		txHash, err := wallet.SendTransaction(ctx, txData, ethClient)

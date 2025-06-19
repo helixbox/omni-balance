@@ -22,7 +22,7 @@ require (
 	github.com/schollz/progressbar/v3 v3.14.6
 	github.com/shopspring/decimal v1.4.0
 	github.com/spf13/cast v1.6.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/tidwall/gjson v1.17.3
 	github.com/uniswapv3-go/uniswapv3-universal-router-decoder-go v0.3.0
 	github.com/urfave/cli/v2 v2.27.2

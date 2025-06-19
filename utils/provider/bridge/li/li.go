@@ -232,7 +232,7 @@ func (l Li) Swap(ctx context.Context, args provider.SwapParams) (result provider
 		sr.SetOrder(quote)
 		args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusPending).Out())
 		log.Debugf("#%d sending tx on chain", args.OrderId)
-		txHash, err := args.Sender.SendTransaction(ctx, &types.LegacyTx{
+		txHash, err := args.Sender.SendTransaction(ctx, &types.DynamicFeeTx{
 			To:    &txn.To,
 			Value: value.BigInt(),
 			Data:  common.Hex2Bytes(strings.TrimPrefix(txn.Data, "0x")),

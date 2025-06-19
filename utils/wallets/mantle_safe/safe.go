@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
+
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/constant"
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/notice"
 	"omni-balance/utils/wallets"
-	"strings"
-	"time"
 
 	log "omni-balance/utils/logging"
 
@@ -104,12 +105,14 @@ func (s *MantleSafe) SignRawMessage(_ []byte) (sig []byte, err error) {
 }
 
 func (s *MantleSafe) GetExternalBalance(ctx context.Context, tokenAddress common.Address, decimals int32,
-	client simulated.Client) (decimal.Decimal, error) {
+	client simulated.Client,
+) (decimal.Decimal, error) {
 	return s.GetBalance(ctx, tokenAddress, decimals, client)
 }
 
 func (s *MantleSafe) GetBalance(ctx context.Context, tokenAddress common.Address, decimals int32,
-	client simulated.Client) (decimal.Decimal, error) {
+	client simulated.Client,
+) (decimal.Decimal, error) {
 	return chains.GetTokenBalance(ctx, client, tokenAddress.Hex(), s.GetAddress().Hex(), decimals)
 }
 
@@ -122,7 +125,7 @@ func (s *MantleSafe) GetNonce(ctx context.Context, client simulated.Client) (uin
 	return client.NonceAt(ctx, s.GetAddress(), nil)
 }
 
-func (s *MantleSafe) SendTransaction(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
+func (s *MantleSafe) SendTransaction(ctx context.Context, tx *types.DynamicFeeTx, client simulated.Client) (common.Hash, error) {
 	return s.MultisigTransaction(ctx, tx, client)
 }
 

@@ -217,7 +217,7 @@ func (o *OKX) Swap(ctx context.Context, args provider.SwapParams) (provider.Swap
 		}
 
 		args.RecordFn(sh.SetActions(SourceChainSendingAction).SetStatus(provider.TxStatusPending).Out())
-		txHash, err := args.Sender.SendTransaction(ctx, &types.LegacyTx{
+		txHash, err := args.Sender.SendTransaction(ctx, &types.DynamicFeeTx{
 			To:    &buildTx.Tx.To,
 			Value: buildTx.Tx.Value.BigInt(),
 			Data:  common.Hex2Bytes(strings.TrimPrefix(buildTx.Tx.Data, "0x")),

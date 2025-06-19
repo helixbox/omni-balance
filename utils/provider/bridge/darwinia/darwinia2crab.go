@@ -40,7 +40,7 @@ var (
 	}
 )
 
-func Darwinia2Crab(ctx context.Context, args SwapParams) (tx *types.LegacyTx, err error) {
+func Darwinia2Crab(ctx context.Context, args SwapParams) (tx *types.DynamicFeeTx, err error) {
 	tokenConf := darwinia2Crab[strings.ToUpper(args.TokenName)]
 	if tokenConf.sourceChainId == 0 {
 		return nil, errors.Errorf("not support token %s", args.TokenName)
@@ -95,7 +95,7 @@ func Darwinia2Crab(ctx context.Context, args SwapParams) (tx *types.LegacyTx, er
 	}
 
 	if args.OnlyFee {
-		return &types.LegacyTx{
+		return &types.DynamicFeeTx{
 			Value: fee.BigInt(),
 		}, nil
 	}
@@ -113,7 +113,7 @@ func Darwinia2Crab(ctx context.Context, args SwapParams) (tx *types.LegacyTx, er
 			return nil, errors.Wrap(err, "burnAndXUnlock")
 		}
 	}
-	a := &types.LegacyTx{
+	a := &types.DynamicFeeTx{
 		To:    &tokenConf.contractAddress,
 		Value: args.Amount.Add(fee).BigInt(),
 		Data:  data,

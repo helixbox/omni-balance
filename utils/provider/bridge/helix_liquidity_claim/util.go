@@ -20,7 +20,7 @@ import (
 )
 
 // BuildTx The client must is item.ToChain
-func (c Claim) BuildTx(ctx context.Context, client simulated.Client, Address common.Address, item NeedWithdrawRecords) (*types.LegacyTx, error) {
+func (c Claim) BuildTx(ctx context.Context, client simulated.Client, Address common.Address, item NeedWithdrawRecords) (*types.DynamicFeeTx, error) {
 	fromChannel := messagerAddress[item.FromChain][item.Channel]
 	toChannel := messagerAddress[item.ToChain][item.Channel]
 	if fromChannel.Cmp(constant.ZeroAddress) == 0 ||
@@ -72,7 +72,7 @@ func (c Claim) BuildTx(ctx context.Context, client simulated.Client, Address com
 		return nil, errors.Wrap(err, "withdraw liquidity")
 	}
 	to := lnv3BridgeContractAddress[item.FromChain]
-	return &types.LegacyTx{
+	return &types.DynamicFeeTx{
 		To:    &to,
 		Value: params.Fee.BigInt(),
 		Data:  txData,

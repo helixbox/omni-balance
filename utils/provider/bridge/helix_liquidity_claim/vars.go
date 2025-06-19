@@ -2,11 +2,12 @@ package helix_liquidity_claim
 
 import (
 	"context"
+	"omni-balance/utils/constant"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/shopspring/decimal"
-	"omni-balance/utils/constant"
 )
 
 var (
@@ -105,7 +106,7 @@ type Messager interface {
 
 type TxData struct {
 	ChainName string
-	TxData    []*types.LegacyTx
+	TxData    []*types.DynamicFeeTx
 }
 
 type MessagerParams struct {

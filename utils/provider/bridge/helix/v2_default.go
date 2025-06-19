@@ -2,14 +2,15 @@ package helix
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
 	"math/big"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/provider/bridge/helix/abi_v2_default"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 )
 
 type V2Default struct {
@@ -53,7 +54,7 @@ func (v *V2Default) TransferAndLockMargin(_snapshot abi_v2_default.LnDefaultBrid
 	return abiObj.Pack("transferAndLockMargin", _snapshot, _amount, _receiver)
 }
 
-func (v *V2Default) Do(_ context.Context, opts TransferOptions) (tx *types.LegacyTx, err error) {
+func (v *V2Default) Do(_ context.Context, opts TransferOptions) (tx *types.DynamicFeeTx, err error) {
 	var (
 		sourceContractAddress, _ = v.getContract(v.opts.SourceChain, v.opts.TargetChain)
 		targetChain              = v.opts.Config.GetChainConfig(v.opts.TargetChain)
@@ -78,7 +79,7 @@ func (v *V2Default) Do(_ context.Context, opts TransferOptions) (tx *types.Legac
 		return nil, errors.Wrap(err, "transferAndLockMargin")
 	}
 
-	a := &types.LegacyTx{
+	a := &types.DynamicFeeTx{
 		To:    &sourceContractAddress,
 		Value: amount.Add(opts.TotalFee).BigInt(),
 		Data:  data,

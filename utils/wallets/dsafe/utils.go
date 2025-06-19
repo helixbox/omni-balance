@@ -6,14 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strings"
+	"sync"
+
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/constant"
 	apiclient "omni-balance/utils/safe_api/client"
 	"omni-balance/utils/wallets/safe"
 	"omni-balance/utils/wallets/safe/safe_abi"
-	"strings"
-	"sync"
 
 	log "omni-balance/utils/logging"
 
@@ -30,9 +31,7 @@ import (
 	"github.com/spf13/cast"
 )
 
-var (
-	safeGlobalLocker sync.Mutex
-)
+var safeGlobalLocker sync.Mutex
 
 type SafeResp struct {
 	Code    int    `json:"code"`
@@ -184,8 +183,8 @@ func (s *Dsafe) GetChainIdByCtx(ctx context.Context) int {
 }
 
 func (s *Dsafe) safeWalletInfo(ctx context.Context) (*Info, error) {
-	var address = s.getOperatorSafeAddress().Hex()
-	var result = new(Info)
+	address := s.getOperatorSafeAddress().Hex()
+	result := new(Info)
 	u := fmt.Sprintf("https://dsafe.dcdao.box/cgw/v1/chains/46/safes/%s", address)
 	if err := utils.Request(ctx, "GET", u, nil, &result); err != nil {
 		return nil, err
@@ -200,14 +199,14 @@ func (s *Dsafe) Client(ctx context.Context) *apiclient.SafeTransactionServiceAPI
 	return apiclient.New(c, strfmt.Default)
 }
 
-func (s *Dsafe) Transfer(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
+func (s *Dsafe) Transfer(ctx context.Context, tx *types.DynamicFeeTx, client simulated.Client) (common.Hash, error) {
 	if s.operatorSafe != nil {
 		return s.operatorSafe.SendTransaction(ctx, tx, client)
 	}
 	return chains.SendTransaction(ctx, client, tx, s.GetAddress(true), s.conf.Operator.PrivateKey)
 }
 
-func (s *Dsafe) MultisigTransaction(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
+func (s *Dsafe) MultisigTransaction(ctx context.Context, tx *types.DynamicFeeTx, client simulated.Client) (common.Hash, error) {
 	if tx.Nonce == 0 {
 		nonce, err := s.nonce(ctx)
 		if err != nil {
@@ -273,13 +272,13 @@ func (s *Dsafe) getOperatorAddress() common.Address {
 
 func (s *Dsafe) nonce(ctx context.Context) (int64, error) {
 	u := fmt.Sprintf("https://dsafe.dcdao.box/cgw/v1/chains/46/safes/%s/nonces", s.getOperatorSafeAddress().Hex())
-	var dest = struct {
+	dest := struct {
 		RecommendedNonce int64 `json:"recommendedNonce"`
 	}{}
 	return dest.RecommendedNonce, utils.Request(ctx, "GET", u, nil, &dest)
 }
 
-func (s *Dsafe) proposeTransaction(ctx context.Context, tx *types.LegacyTx) (common.Hash, error) {
+func (s *Dsafe) proposeTransaction(ctx context.Context, tx *types.DynamicFeeTx) (common.Hash, error) {
 	safeGlobalLocker.Lock()
 	defer safeGlobalLocker.Unlock()
 	nonce, err := s.nonce(ctx)
@@ -444,12 +443,11 @@ func (s *Dsafe) ExecTransaction(ctx context.Context, tx Transaction, client simu
 	if err != nil {
 		return errors.Wrap(err, "estimate gas error")
 	}
-	chainTransaction := types.NewTx(&types.LegacyTx{
-		Nonce:    nonce,
-		GasPrice: gasPrice,
-		Gas:      gas,
-		To:       &to,
-		Data:     input,
+	chainTransaction := types.NewTx(&types.DynamicFeeTx{
+		Nonce: nonce,
+		Gas:   gas,
+		To:    &to,
+		Data:  input,
 	})
 
 	signTx, err := chains.SignTx(chainTransaction, s.conf.PrivateKey, int64(s.GetChainIdByCtx(ctx)))

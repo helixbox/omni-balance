@@ -1,4 +1,4 @@
-FROM golang:1.22.3-alpine as builder
+FROM golang:1.22.3-alpine AS builder
 WORKDIR /app
 
 COPY go.mod go.sum ./
@@ -16,10 +16,10 @@ RUN CGO_ENABLED=0 go build -a -ldflags \
             -X 'main.commitTime=$COMMIT_TIME' -s -w -extldflags '-static'" \
         -o omni-balance ./cmd
 
-FROM gruebel/upx:latest as upx
+FROM gruebel/upx:latest AS upx
 COPY --from=builder /app/omni-balance /omni-balance
 RUN upx --best --lzma /omni-balance
 
-FROM alpine:latest as prod
+FROM alpine:latest AS prod
 COPY --from=upx /omni-balance /omni-balance
 ENTRYPOINT ["/omni-balance"]

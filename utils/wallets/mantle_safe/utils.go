@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strings"
+	"sync"
+
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/constant"
 	"omni-balance/utils/wallets/safe"
 	"omni-balance/utils/wallets/safe/safe_abi"
-	"strings"
-	"sync"
 
 	log "omni-balance/utils/logging"
 
@@ -28,9 +29,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-var (
-	safeGlobalLocker sync.Mutex
-)
+var safeGlobalLocker sync.Mutex
 
 type SafeResp struct {
 	Code    int    `json:"code"`
@@ -43,7 +42,6 @@ type ProposeTransaction struct {
 	Data           string `json:"data"`
 	Operation      int    `json:"operation"`
 	BaseGas        string `json:"baseGas"`
-	GasPrice       string `json:"gasPrice"`
 	GasToken       string `json:"gasToken"`
 	RefundReceiver string `json:"refundReceiver"`
 	Nonce          string `json:"nonce"`
@@ -182,8 +180,8 @@ func (s *MantleSafe) GetChainIdByCtx(ctx context.Context) int {
 }
 
 func (s *MantleSafe) safeWalletInfo(ctx context.Context) (*Info, error) {
-	var address = s.getOperatorSafeAddress().Hex()
-	var result = new(Info)
+	address := s.getOperatorSafeAddress().Hex()
+	result := new(Info)
 	u := fmt.Sprintf("https://gateway.multisig.mantle.xyz/v1/chains/5000/safes/%s", address)
 	if err := utils.Request(ctx, "GET", u, nil, &result); err != nil {
 		return nil, err
@@ -191,14 +189,14 @@ func (s *MantleSafe) safeWalletInfo(ctx context.Context) (*Info, error) {
 	return result, nil
 }
 
-func (s *MantleSafe) Transfer(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
+func (s *MantleSafe) Transfer(ctx context.Context, tx *types.DynamicFeeTx, client simulated.Client) (common.Hash, error) {
 	if s.operatorSafe != nil {
 		return s.operatorSafe.SendTransaction(ctx, tx, client)
 	}
 	return chains.SendTransaction(ctx, client, tx, s.GetAddress(true), s.conf.Operator.PrivateKey)
 }
 
-func (s *MantleSafe) MultisigTransaction(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
+func (s *MantleSafe) MultisigTransaction(ctx context.Context, tx *types.DynamicFeeTx, client simulated.Client) (common.Hash, error) {
 	if tx.Nonce == 0 {
 		nonce, err := s.nonce(ctx)
 		if err != nil {
@@ -264,13 +262,13 @@ func (s *MantleSafe) getOperatorAddress() common.Address {
 
 func (s *MantleSafe) nonce(ctx context.Context) (int64, error) {
 	u := fmt.Sprintf("https://gateway.multisig.mantle.xyz/v1/chains/5000/safes/%s/nonces", s.getOperatorSafeAddress().Hex())
-	var dest = struct {
+	dest := struct {
 		RecommendedNonce int64 `json:"recommendedNonce"`
 	}{}
 	return dest.RecommendedNonce, utils.Request(ctx, "GET", u, nil, &dest)
 }
 
-func (s *MantleSafe) proposeTransaction(ctx context.Context, tx *types.LegacyTx) (common.Hash, error) {
+func (s *MantleSafe) proposeTransaction(ctx context.Context, tx *types.DynamicFeeTx) (common.Hash, error) {
 	safeGlobalLocker.Lock()
 	defer safeGlobalLocker.Unlock()
 	nonce, err := s.nonce(ctx)
@@ -307,7 +305,6 @@ func (s *MantleSafe) proposeTransaction(ctx context.Context, tx *types.LegacyTx)
 		Value:          t.Value.String(),
 		Data:           "0x" + t.Data,
 		BaseGas:        "0",
-		GasPrice:       "0",
 		GasToken:       constant.ZeroAddress.Hex(),
 		RefundReceiver: constant.ZeroAddress.Hex(),
 		Nonce:          cast.ToString(t.Nonce),
@@ -435,12 +432,11 @@ func (s *MantleSafe) ExecTransaction(ctx context.Context, tx Transaction, client
 	if err != nil {
 		return errors.Wrap(err, "estimate gas error")
 	}
-	chainTransaction := types.NewTx(&types.LegacyTx{
-		Nonce:    nonce,
-		GasPrice: gasPrice,
-		Gas:      gas,
-		To:       &to,
-		Data:     input,
+	chainTransaction := types.NewTx(&types.DynamicFeeTx{
+		Nonce: nonce,
+		Gas:   gas,
+		To:    &to,
+		Data:  input,
 	})
 
 	signTx, err := chains.SignTx(chainTransaction, s.conf.PrivateKey, int64(s.GetChainIdByCtx(ctx)))
@@ -464,7 +460,6 @@ func (s *MantleSafe) eip712(ctx context.Context, t safe.Transaction) apitypes.Ty
 				{Type: "uint8", Name: "operation"},
 				{Type: "uint256", Name: "safeTxGas"},
 				{Type: "uint256", Name: "baseGas"},
-				{Type: "uint256", Name: "gasPrice"},
 				{Type: "address", Name: "gasToken"},
 				{Type: "address", Name: "refundReceiver"},
 				{Type: "uint256", Name: "nonce"},
@@ -481,7 +476,6 @@ func (s *MantleSafe) eip712(ctx context.Context, t safe.Transaction) apitypes.Ty
 			"data":           common.Hex2Bytes(t.Data),
 			"operation":      big.NewInt(int64(t.Operation)),
 			"baseGas":        t.BaseGas.BigInt(),
-			"gasPrice":       t.GasPrice.BigInt(),
 			"gasToken":       t.GasToken.Hex(),
 			"refundReceiver": t.RefundReceiver.Hex(),
 			"nonce":          big.NewInt(int64(t.Nonce)),

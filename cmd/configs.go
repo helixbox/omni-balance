@@ -5,6 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
 	"omni-balance/internal/daemons"
 	"omni-balance/internal/db"
 	"omni-balance/internal/handler"
@@ -12,11 +18,6 @@ import (
 	"omni-balance/utils"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/constant"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-	"time"
 
 	log "omni-balance/utils/logging"
 
@@ -38,7 +39,7 @@ func startHttpServer(_ context.Context, port string) error {
 			writer.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		var args = make(map[string]interface{})
+		args := make(map[string]interface{})
 		if err := json.NewDecoder(request.Body).Decode(&args); err != nil {
 			writer.WriteHeader(http.StatusBadRequest)
 			return
@@ -50,7 +51,6 @@ func startHttpServer(_ context.Context, port string) error {
 		setPlaceholderFinished <- struct{}{}
 	}))
 	http.Handle("/api/gate/liquidity", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		if !utils.IsFinishedInit() {
 			http.Error(w, "Not finished init", http.StatusInternalServerError)
 			return
@@ -62,7 +62,7 @@ func startHttpServer(_ context.Context, port string) error {
 			writer.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		var order = struct {
+		order := struct {
 			Id int `json:"id" form:"id"`
 		}{}
 		if err := json.NewDecoder(request.Body).Decode(&order); err != nil {
@@ -102,7 +102,7 @@ func waitForPlaceholder(_ context.Context, configPath string) (newConfigPath str
 		return true
 	})
 	newConfigPath = filepath.Join(os.TempDir(), ".omni-balance.config.yaml")
-	if err := os.WriteFile(newConfigPath, data, 0644); err != nil {
+	if err := os.WriteFile(newConfigPath, data, 0o644); err != nil {
 		return "", err
 	}
 	return newConfigPath, err
@@ -135,7 +135,7 @@ func initConfig(ctx context.Context, enablePlaceholder bool, configPath, serverP
 }
 
 func CreateExampleConfig(exampleConfigPath string) error {
-	var tasks = make(map[string]time.Duration)
+	tasks := make(map[string]time.Duration)
 	for _, v := range daemons.GetTaskConfig() {
 		tasks[v.Name] = v.DefaultInterval
 	}
@@ -265,7 +265,7 @@ func CreateExampleConfig(exampleConfigPath string) error {
 	if err != nil {
 		return errors.Wrap(err, "encode example config")
 	}
-	if err := os.WriteFile(exampleConfigPath, exampleConfigData, 0644); err != nil {
+	if err := os.WriteFile(exampleConfigPath, exampleConfigData, 0o644); err != nil {
 		return errors.Wrap(err, "write example config")
 	}
 	log.Infof("Example config file created: %s. In the example configuration file, some values are enclosed in '<>'."+

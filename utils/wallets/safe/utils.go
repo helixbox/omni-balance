@@ -5,6 +5,11 @@ import (
 	"fmt"
 	"math/big"
 	"net/url"
+	"runtime/debug"
+	"strings"
+	"sync"
+	"time"
+
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/constant"
@@ -13,10 +18,6 @@ import (
 	"omni-balance/utils/safe_api/client/safes"
 	"omni-balance/utils/safe_api/client/transactions"
 	"omni-balance/utils/wallets/safe/safe_abi"
-	"runtime/debug"
-	"strings"
-	"sync"
-	"time"
 
 	log "omni-balance/utils/logging"
 
@@ -132,7 +133,7 @@ func (s *Safe) GetChainIdByCtx(ctx context.Context) int {
 }
 
 func (s *Safe) safeWalletInfo(ctx context.Context) (*safe_api.SafeInfoResponse, error) {
-	var address = s.getOperatorSafeAddress().Hex()
+	address := s.getOperatorSafeAddress().Hex()
 
 	resp, err := s.Client(ctx).Safes.V1SafesRead(&safes.V1SafesReadParams{Address: address}, nil)
 	if err != nil {
@@ -148,14 +149,14 @@ func (s *Safe) Client(ctx context.Context) *apiclient.SafeTransactionServiceAPI 
 	return apiclient.New(c, strfmt.Default)
 }
 
-func (s *Safe) Transfer(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
+func (s *Safe) Transfer(ctx context.Context, tx *types.DynamicFeeTx, client simulated.Client) (common.Hash, error) {
 	if s.operatorSafe != nil {
 		return s.operatorSafe.SendTransaction(ctx, tx, client)
 	}
 	return chains.SendTransaction(ctx, client, tx, s.GetAddress(true), s.conf.Operator.PrivateKey)
 }
 
-func (s *Safe) MultisigTransaction(ctx context.Context, tx *types.LegacyTx, client simulated.Client) (common.Hash, error) {
+func (s *Safe) MultisigTransaction(ctx context.Context, tx *types.DynamicFeeTx, client simulated.Client) (common.Hash, error) {
 	if tx.Nonce == 0 {
 		nonce, err := s.nonce(ctx)
 		if err != nil {
@@ -221,7 +222,7 @@ func (s *Safe) getOperatorAddress() common.Address {
 
 func (s *Safe) nonce(ctx context.Context) (int64, error) {
 	u := fmt.Sprintf("https://safe-client.safe.global/v1/chains/%d/safes/%s/nonces", s.GetChainIdByCtx(ctx), s.getOperatorSafeAddress().Hex())
-	var dest = struct {
+	dest := struct {
 		RecommendedNonce int64 `json:"recommendedNonce"`
 	}{}
 	return dest.RecommendedNonce, utils.Request(ctx, "GET", u, nil, &dest)
@@ -282,7 +283,7 @@ type TxList struct {
 	CountUniqueNonce int `json:"countUniqueNonce"`
 }
 
-func (s *Safe) TxIsInQueue(ctx context.Context, tx *types.LegacyTx) (string, error) {
+func (s *Safe) TxIsInQueue(ctx context.Context, tx *types.DynamicFeeTx) (string, error) {
 	u := fmt.Sprintf("https://%s/api/v1/safes/%s/multisig-transactions/?limit=100&ordering=-timestamp&executed=false",
 		s.GetDomainByCtx(ctx), s.getOperatorSafeAddress().Hex())
 	for {
@@ -306,7 +307,7 @@ func (s *Safe) TxIsInQueue(ctx context.Context, tx *types.LegacyTx) (string, err
 	}
 }
 
-func (s *Safe) proposeTransaction(ctx context.Context, tx *types.LegacyTx) (common.Hash, error) {
+func (s *Safe) proposeTransaction(ctx context.Context, tx *types.DynamicFeeTx) (common.Hash, error) {
 	safeGlobalLocker.Lock()
 	defer safeGlobalLocker.Unlock()
 	safeHash, err := s.TxIsInQueue(ctx, tx)
@@ -391,9 +392,7 @@ func (s *Safe) ListMultiSigTransactions(ctx context.Context, filters ...string) 
 		return nil, errors.Wrap(err, "parse url error")
 	}
 	query := u.Query()
-	var (
-		key string
-	)
+	var key string
 	for index, v := range filters {
 		if index%2 == 0 {
 			key = v
@@ -402,7 +401,7 @@ func (s *Safe) ListMultiSigTransactions(ctx context.Context, filters ...string) 
 		query.Add(key, v)
 	}
 	u.RawQuery = query.Encode()
-	var result = struct {
+	result := struct {
 		Count  int           `json:"count"`
 		Result []Transaction `json:"results"`
 	}{}

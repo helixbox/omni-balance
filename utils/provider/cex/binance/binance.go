@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
+
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/constant"
 	"omni-balance/utils/provider"
-	"strings"
-	"time"
 
 	log "omni-balance/utils/logging"
 
@@ -116,7 +117,6 @@ func New(conf configs.Config, noInit ...bool) (provider.Provider, error) {
 }
 
 func (g *Binance) Swap(ctx context.Context, args provider.SwapParams) (provider.SwapResult, error) {
-
 	var (
 		recordFn = func(s provider.SwapHistory, errs ...error) {
 			s.ProviderType = string(g.Type())
@@ -131,14 +131,12 @@ func (g *Binance) Swap(ctx context.Context, args provider.SwapParams) (provider.
 	)
 
 	botConfigRaw := g.config.GetBotConfigUnderWallet(args.Receiver, g.Name())
-	var (
-		botConfig = struct {
-			// tokenName: chainName
-			OnlyWayTokens map[string]string `json:"onlyOneWayTokens" yaml:"onlyOneWayTokens" help:"Only way tokens"`
-			// sourceToken: targetToken
-			ChangeTokens map[string]string `json:"changeTokens" yaml:"changeTokens" help:"Change tokens"`
-		}{}
-	)
+	botConfig := struct {
+		// tokenName: chainName
+		OnlyWayTokens map[string]string `json:"onlyOneWayTokens" yaml:"onlyOneWayTokens" help:"Only way tokens"`
+		// sourceToken: targetToken
+		ChangeTokens map[string]string `json:"changeTokens" yaml:"changeTokens" help:"Change tokens"`
+	}{}
 	if botConfigRaw != nil {
 		data, _ := json.Marshal(botConfigRaw)
 		_ = json.Unmarshal(data, &botConfig)
@@ -244,7 +242,7 @@ func (g *Binance) Swap(ctx context.Context, args provider.SwapParams) (provider.
 		if len(depositAddress) == 0 {
 			return sr.OutError(errors.Errorf("no deposit address found"))
 		}
-		var deposit = depositAddress[0].Address
+		deposit := depositAddress[0].Address
 		if deposit == "" { // not found
 			return sr.OutError(errors.Errorf("no deposit address found"))
 		}
@@ -331,14 +329,12 @@ func (g *Binance) Swap(ctx context.Context, args provider.SwapParams) (provider.
 		}
 
 		botConfigRaw := g.config.GetBotConfigUnderWallet(args.Receiver, g.Name())
-		var (
-			botConfig = struct {
-				// tokenName: chainName
-				OnlyWayTokens map[string]string `json:"onlyOneWayTokens" yaml:"onlyOneWayTokens" help:"Only way tokens"`
-				// sourceToken: targetToken
-				ChangeTokens map[string]string `json:"changeTokens" yaml:"changeTokens" help:"Change tokens"`
-			}{}
-		)
+		botConfig := struct {
+			// tokenName: chainName
+			OnlyWayTokens map[string]string `json:"onlyOneWayTokens" yaml:"onlyOneWayTokens" help:"Only way tokens"`
+			// sourceToken: targetToken
+			ChangeTokens map[string]string `json:"changeTokens" yaml:"changeTokens" help:"Change tokens"`
+		}{}
 		if botConfigRaw != nil {
 			data, _ := json.Marshal(botConfigRaw)
 			_ = json.Unmarshal(data, &botConfig)
