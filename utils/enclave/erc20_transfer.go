@@ -48,7 +48,6 @@ func buildTransferRequest(tx *types.Transaction) (*TransferRequest, error) {
 	}, nil
 }
 
-// SignTransaction 请求签名服务对交易进行签名
 func (c *Client) SignErc20Transfer(tx *types.Transaction, chainID int64) (*types.Transaction, error) {
 	req, err := buildTransferRequest(tx)
 	if err != nil {

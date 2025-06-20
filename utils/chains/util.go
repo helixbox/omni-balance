@@ -99,6 +99,7 @@ func GetTokenBalance(ctx context.Context, client simulated.Client, tokenAddress,
 type SignTxType string
 
 const (
+	SignTxTypeApprove        SignTxType = "approve"
 	SignTxTypeTransfer       SignTxType = "transfer"
 	SignTxTypeEth2Arb1Bridge SignTxType = "eth-arb1-bridge"
 	SignTxTypeArb12EthBridge SignTxType = "arb1-eth-bridge"
@@ -113,6 +114,8 @@ func SignTx(tx *types.Transaction, privateKey string, chainId int64, signTxType 
 	client := enclave.NewClient(privateKey)
 
 	switch signTxType {
+	case SignTxTypeApprove:
+		return client.SignErc20Approve(tx, chainId)
 	case SignTxTypeTransfer:
 		if tx.Value().Cmp(big.NewInt(0)) > 0 {
 			return nil, errors.Wrap(error_types.ErrEnclaveNotSupportNativeToken, "enclave native token not support")
@@ -201,6 +204,7 @@ func TokenApprove(ctx context.Context, args TokenApproveParams) error {
 		return errors.Wrap(err, "abi pack")
 	}
 
+	ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, SignTxTypeApprove)
 	txHash, err := args.SendTransaction(ctx, &types.DynamicFeeTx{
 		To:   &args.TokenAddress,
 		Data: input,

@@ -75,7 +75,7 @@ func buildL1ToL2Tx(ctx context.Context, args provider.SwapParams, client simulat
 func (b *Ethereum2Arbitrum) CheckToken(_ context.Context, tokenName, tokenInChainName, tokenOutChainName string,
 	_ decimal.Decimal,
 ) (bool, error) {
-	if strings.ToLower(tokenInChainName) == "ethereum" && strings.ToLower(tokenOutChainName) == "arbitrum" {
+	if strings.ToLower(tokenInChainName) == constant.Ethereum && strings.ToLower(tokenOutChainName) == constant.Arbitrum {
 		if strings.ToUpper(tokenName) == "COW" {
 			return true, nil
 		}
@@ -84,12 +84,15 @@ func (b *Ethereum2Arbitrum) CheckToken(_ context.Context, tokenName, tokenInChai
 }
 
 func (b *Ethereum2Arbitrum) GetCost(ctx context.Context, args provider.SwapParams) (provider.TokenInCosts, error) {
-	return provider.TokenInCosts{
-		provider.TokenInCost{
-			TokenName:  "ETH",
-			CostAmount: decimal.NewFromInt(0),
-		},
-	}, nil
+	if strings.ToLower(args.TargetChain) == constant.Arbitrum {
+		return provider.TokenInCosts{
+			provider.TokenInCost{
+				TokenName:  "ETH",
+				CostAmount: decimal.NewFromInt(0),
+			},
+		}, nil
+	}
+	return nil, nil
 }
 
 func (b *Ethereum2Arbitrum) Swap(ctx context.Context, args provider.SwapParams) (result provider.SwapResult, err error) {
@@ -117,6 +120,9 @@ func (b *Ethereum2Arbitrum) Swap(ctx context.Context, args provider.SwapParams) 
 			Tx:           history.Tx,
 		}, nil
 	}
+
+	args.SourceChain = constant.Ethereum
+	args.TargetChain = constant.Arbitrum
 
 	if args.SourceChain == args.TargetChain && history.Status == string(provider.TxStatusSuccess) {
 		log.Debugf("source chain %s and target chain %s is same", args.SourceChain, args.TargetChain)
@@ -231,7 +237,7 @@ func (b *Ethereum2Arbitrum) Help() []string {
 }
 
 func (b *Ethereum2Arbitrum) Name() string {
-	return "ethereum-arbitrum-bridge"
+	return "ethereum-arbitrum"
 }
 
 func (b *Ethereum2Arbitrum) Type() configs.ProviderType {
