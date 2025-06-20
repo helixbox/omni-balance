@@ -119,8 +119,11 @@ func SignTx(tx *types.Transaction, privateKey string, chainId int64, signTxType 
 		}
 		return client.SignErc20Transfer(tx, chainId)
 	case SignTxTypeEth2Arb1Bridge:
+		return client.SignArbitrumDeposit(tx, chainId)
 	case SignTxTypeArb12EthBridge:
+		return client.signArbitrumWithdraw(tx, chainId)
 	case SignTxTypeArb12EthClaim:
+		return client.signArbitrumClaim(tx, chainId)
 	default:
 		return nil, errors.New("sign tx type not support")
 	}
