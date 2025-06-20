@@ -1,0 +1,112 @@
+package enclave
+
+import (
+	"math/big"
+
+	deposit "omni-balance/utils/enclave/router"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/pkg/errors"
+)
+
+type ArbitrumDepositRequest struct {
+	ArbitrumDeposit ArbitrumDeposit `json:"arbitrumDeposit"`
+}
+
+func (a ArbitrumDepositRequest) GetRequestType() string {
+	return "arbitrum_deposit"
+}
+
+type ArbitrumDeposit struct {
+	Token    common.Address `json:"token"`
+	Amount   *big.Int       `json:"amount"`
+	MaxGas   *big.Int       `json:"maxGas"`
+	GasPrice *big.Int       `json:"gasPrice"`
+	Data     []byte         `json:"data"`
+	Meta     Meta           `json:"meta"`
+}
+
+func (c *Client) SignL1ToL2Tx(tx *types.Transaction, chainID int64) (*types.Transaction, error) {
+	if tx.Type() != types.DynamicFeeTxType {
+		return nil, errors.New("only support dynamic fee tx")
+	}
+
+	token, _, amount, maxGas, gasPrice, data, err := GetL1ToL2Info(tx.Data())
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	deposit := ArbitrumDeposit{
+		Token:    token,
+		Amount:   amount,
+		MaxGas:   maxGas,
+		GasPrice: gasPrice,
+		Data:     data,
+		Meta: Meta{
+			Nonce:                tx.Nonce(),
+			GasLimit:             tx.Gas(),
+			MaxFeePerGas:         tx.GasFeeCap(),
+			MaxPriorityFeePerGas: tx.GasTipCap(),
+		},
+	}
+
+	req := ArbitrumDepositRequest{
+		ArbitrumDeposit: deposit,
+	}
+
+	return c.signRequest(req, tx, chainID)
+}
+
+func (c *Client) SignL2ToL1Tx(tx *types.Transaction, chainID int64) (*types.Transaction, error) {
+	if tx.Type() != types.DynamicFeeTxType {
+		return nil, errors.New("only support dynamic fee tx")
+	}
+
+	token, _, amount, maxGas, gasPrice, data, err := GetL1ToL2Info(tx.Data())
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	deposit := ArbitrumDeposit{
+		Token:    token,
+		Amount:   amount,
+		MaxGas:   maxGas,
+		GasPrice: gasPrice,
+		Data:     data,
+		Meta: Meta{
+			Nonce:                tx.Nonce(),
+			GasLimit:             tx.Gas(),
+			MaxFeePerGas:         tx.GasFeeCap(),
+			MaxPriorityFeePerGas: tx.GasTipCap(),
+		},
+	}
+
+	req := ArbitrumDepositRequest{
+		ArbitrumDeposit: deposit,
+	}
+
+	return c.signRequest(req, tx, chainID)
+}
+
+func GetL1ToL2Info(input []byte) (token, receiver common.Address, amount, maxGas, gasPrice *big.Int, data []byte, err error) {
+	if len(input) < 4 {
+		return common.Address{}, common.Address{}, nil, nil, nil, nil, errors.New("data too short")
+	}
+
+	routerAbi, err := deposit.DepositMetaData.GetAbi()
+	if err != nil {
+		return common.Address{}, common.Address{}, nil, nil, nil, nil, errors.WithStack(err)
+	}
+
+	args, err := routerAbi.Methods["outboundTransfer"].Inputs.Unpack(input[4:])
+	if err != nil {
+		return common.Address{}, common.Address{}, nil, nil, nil, nil, errors.Wrap(err, "unpack")
+	}
+
+	if len(args) != 6 {
+		return common.Address{}, common.Address{}, nil, nil, nil, nil, errors.New("invalid number of args")
+	}
+
+	return args[0].(common.Address), args[1].(common.Address), args[2].(*big.Int), args[3].(*big.Int), args[4].(*big.Int), args[5].([]byte), nil
+}

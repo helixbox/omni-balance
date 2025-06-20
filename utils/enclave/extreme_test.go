@@ -27,7 +27,7 @@ func TestClient_SignErc20Transfer(t *testing.T) {
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
 		// 解码请求体
-		var req SignRequest
+		var req TransferRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
 		assert.NoError(t, err)
 

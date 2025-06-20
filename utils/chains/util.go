@@ -105,15 +105,26 @@ const (
 	SignTxTypeArb12EthClaim  SignTxType = "arb1-eth-claim"
 )
 
-func SignTx(tx *types.Transaction, privateKey string, chainId int64) (*types.Transaction, error) {
+func SignTx(tx *types.Transaction, privateKey string, chainId int64, signTxType SignTxType) (*types.Transaction, error) {
 	if !strings.HasPrefix(privateKey, "http") {
 		return nil, errors.New("only support enclave version")
 	}
+
 	client := enclave.NewClient(privateKey)
-	if tx.Value().Cmp(big.NewInt(0)) > 0 {
-		return nil, errors.Wrap(error_types.ErrEnclaveNotSupportNativeToken, "enclave native token not support")
+
+	switch signTxType {
+	case SignTxTypeTransfer:
+		if tx.Value().Cmp(big.NewInt(0)) > 0 {
+			return nil, errors.Wrap(error_types.ErrEnclaveNotSupportNativeToken, "enclave native token not support")
+		}
+		return client.SignErc20Transfer(tx, chainId)
+	case SignTxTypeEth2Arb1Bridge:
+	case SignTxTypeArb12EthBridge:
+	case SignTxTypeArb12EthClaim:
+	default:
+		return nil, errors.New("sign tx type not support")
 	}
-	return client.SignErc20Transfer(tx, chainId)
+	return nil, errors.New("sign tx type not support")
 }
 
 func SignMsg(msg []byte, privateKey string) (sig []byte, err error) {
@@ -309,7 +320,12 @@ func SendTransaction(ctx context.Context, client simulated.Client, tx *types.Dyn
 	if err != nil {
 		return common.Hash{}, errors.Wrap(err, "get chain id")
 	}
-	transaction, err := SignTx(types.NewTx(tx), privateKey, chainId.Int64())
+
+	var signTxType SignTxType = SignTxTypeTransfer
+	if ctxKey := ctx.Value(constant.SignTxKeyInCtx); ctxKey != nil {
+		signTxType = ctxKey.(SignTxType)
+	}
+	transaction, err := SignTx(types.NewTx(tx), privateKey, chainId.Int64(), signTxType)
 	if err != nil {
 		return common.Hash{}, errors.Wrap(err, "sign tx")
 	}
