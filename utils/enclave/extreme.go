@@ -23,6 +23,7 @@ type Meta struct {
 	GasLimit             uint64   `json:"gasLimit"`
 	MaxFeePerGas         *big.Int `json:"maxFeePerGas"`
 	MaxPriorityFeePerGas *big.Int `json:"maxPriorityFeePerGas"`
+	Value                *big.Int `json:"value,omitempty"`
 }
 
 type SignResponse struct {
@@ -103,3 +104,4 @@ func (c *Client) signRequest(request RequestType, tx *types.Transaction, chainID
 func adjustSignature(sig []byte) {
 	sig[64] = sig[64] - 27
 }
+

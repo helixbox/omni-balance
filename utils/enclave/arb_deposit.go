@@ -19,12 +19,13 @@ func (a ArbitrumDepositRequest) GetRequestType() string {
 }
 
 type ArbitrumDeposit struct {
-	Token    common.Address `json:"token"`
-	Amount   *big.Int       `json:"amount"`
-	MaxGas   *big.Int       `json:"maxGas"`
-	GasPrice *big.Int       `json:"gasPrice"`
-	Data     []byte         `json:"data"`
-	Meta     Meta           `json:"meta"`
+	Token       common.Address `json:"token"`
+	Amount      *big.Int       `json:"amount"`
+	MaxGas      *big.Int       `json:"maxGas"`
+	GasPriceBid *big.Int       `json:"gasPriceBid"`
+	Data        []byte         `json:"data"`
+	Value       *big.Int       `json:"value"`
+	Meta        Meta           `json:"meta"`
 }
 
 func (c *Client) SignArbitrumDeposit(tx *types.Transaction, chainID int64) (*types.Transaction, error) {
@@ -34,13 +35,14 @@ func (c *Client) SignArbitrumDeposit(tx *types.Transaction, chainID int64) (*typ
 	}
 
 	deposit := ArbitrumDeposit{
-		Token:    token,
-		Amount:   amount,
-		MaxGas:   maxGas,
-		GasPrice: gasPrice,
-		Data:     data,
+		Token:       token,
+		Amount:      amount,
+		MaxGas:      maxGas,
+		GasPriceBid: gasPrice,
+		Data:        data,
 		Meta: Meta{
 			Nonce:                tx.Nonce(),
+			Value:                tx.Value(),
 			GasLimit:             tx.Gas(),
 			MaxFeePerGas:         tx.GasFeeCap(),
 			MaxPriorityFeePerGas: tx.GasTipCap(),
