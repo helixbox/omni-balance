@@ -14,7 +14,7 @@ type ArbitrumClaimRequest struct {
 	ArbitrumClaim ArbitrumClaim `json:"arbitrumClaim"`
 }
 
-func (a ArbitrumClaimRequest) GetRequstType() string {
+func (a ArbitrumClaimRequest) GetRequestType() string {
 	return "arbitrum_claim"
 }
 
@@ -31,30 +31,30 @@ type ArbitrumClaim struct {
 }
 
 func (c *Client) SignArbitrumClaim(tx *types.Transaction, chainID int64) (*types.Transaction, error) {
-	res, err := BuildClaimRequest(tx.Data(), tx)
+	req, err := BuildClaimRequest(tx.Data(), tx)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
 	return c.signRequest(req, tx, chainID)
 }
 
-func BuildClaimRequest(input []bytes, tx *types.Transaction) (ArbitrunClaimRequest, error) {
+func BuildClaimRequest(input []byte, tx *types.Transaction) (ArbitrumClaimRequest, error) {
 	if len(input) < 4 {
-		return ArbitrunClaimRequest{}, errors.New("data too short")
+		return ArbitrumClaimRequest{}, errors.New("data too short")
 	}
 
 	outboxAbi, err := outbox.OutboxMetaData.GetAbi()
 	if err != nil {
-		return ArbitrunClaimRequest{}, errors.WithStack(err)
+		return ArbitrumClaimRequest{}, errors.WithStack(err)
 	}
 
-	args, err := routerAbi.Methods["executeTransaction"].Inputs.Unpack(input[4:])
+	args, err := outboxAbi.Methods["executeTransaction"].Inputs.Unpack(input[4:])
 	if err != nil {
-		return ArbitrunClaimRequest{}, errors.Wrap(err, "unpack")
+		return ArbitrumClaimRequest{}, errors.Wrap(err, "unpack")
 	}
 
 	if len(args) != 9 {
-		return ArbitrunClaimRequest{}, errors.New("invalid number of args")
+		return ArbitrumClaimRequest{}, errors.New("invalid number of args")
 	}
 
 	claim := ArbitrumClaim{
@@ -72,5 +72,5 @@ func BuildClaimRequest(input []bytes, tx *types.Transaction) (ArbitrunClaimReque
 			MaxPriorityFeePerGas: tx.GasTipCap(),
 		},
 	}
-	reurn ArbitrumClaimRequest{ArbitrumClaim: claim}, nil
+	return ArbitrumClaimRequest{ArbitrumClaim: claim}, nil
 }
