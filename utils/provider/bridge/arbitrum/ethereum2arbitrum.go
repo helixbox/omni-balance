@@ -1,0 +1,239 @@
+package arbitrum
+
+import (
+	"context"
+	"math/big"
+	"strings"
+
+	"omni-balance/utils/chains"
+	"omni-balance/utils/configs"
+	"omni-balance/utils/constant"
+	"omni-balance/utils/provider"
+
+	log "omni-balance/utils/logging"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
+)
+
+var (
+	ethereum2arbitrum = map[string]tokenConfig{
+		"COW": {
+			l1Address: common.HexToAddress("0xDEf1CA1fb7FBcDC777520aa7f396b4E015F497aB"),
+			l2Address: common.HexToAddress("0xcb8b5CD20BdCaea9a010aC1F8d835824F5C87A04"),
+			gateway:   common.HexToAddress("0xa3A7B6F88361F48403514059F1F16C8E78d60EeC"),
+		},
+	}
+	EthereumChianId int64 = 1
+)
+
+type Ethereum2Arbitrum struct {
+	config configs.Config
+}
+
+func NewL1ToL2(conf configs.Config, noInit ...bool) (provider.Provider, error) {
+	if len(noInit) > 0 && noInit[0] {
+		return &Ethereum2Arbitrum{}, nil
+	}
+	return &Ethereum2Arbitrum{config: conf}, nil
+}
+
+func buildL1ToL2Tx(ctx context.Context, args provider.SwapParams, client simulated.Client) (*types.DynamicFeeTx, error) {
+	var (
+		wallet      = args.Sender
+		realWallet  = wallet.GetAddress(true)
+		tokenConfig = ethereum2arbitrum[strings.ToUpper(args.SourceToken)]
+	)
+
+	err := Approve(ctx, EthereumChianId, tokenConfig.l1Address, tokenConfig.gateway,
+		wallet, args.Amount, client)
+	if err != nil {
+		return nil, errors.Wrap(err, "approve")
+	}
+
+	txRequest, err := Deposit(ctx, tokenConfig.l1Address, realWallet, args.Amount)
+	if err != nil {
+		return nil, errors.Wrap(err, "deposit tx request")
+	}
+
+	toAddr := common.HexToAddress(txRequest.To)
+	value, ok := new(big.Int).SetString(txRequest.Value, 10)
+	if !ok {
+		return nil, errors.New("invalid value string")
+	}
+	return &types.DynamicFeeTx{
+		ChainID: big.NewInt(EthereumChianId),
+		To:      &toAddr,
+		Value:   value,
+		Data:    common.Hex2Bytes(txRequest.Data),
+	}, nil
+}
+
+func (b *Ethereum2Arbitrum) CheckToken(_ context.Context, tokenName, tokenInChainName, tokenOutChainName string,
+	_ decimal.Decimal,
+) (bool, error) {
+	if strings.ToLower(tokenInChainName) == "ethereum" && strings.ToLower(tokenOutChainName) == "arbitrum" {
+		if strings.ToUpper(tokenName) == "COW" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (b *Ethereum2Arbitrum) GetCost(ctx context.Context, args provider.SwapParams) (provider.TokenInCosts, error) {
+	return provider.TokenInCosts{
+		provider.TokenInCost{
+			TokenName:  "ETH",
+			CostAmount: decimal.NewFromInt(0),
+		},
+	}, nil
+}
+
+func (b *Ethereum2Arbitrum) Swap(ctx context.Context, args provider.SwapParams) (result provider.SwapResult, err error) {
+	var (
+		history  = args.LastHistory
+		recordFn = func(s provider.SwapHistory, errs ...error) {
+			s.ProviderType = string(b.Type())
+			s.ProviderName = b.Name()
+			s.Amount = args.Amount
+			if args.RecordFn == nil {
+				return
+			}
+			args.RecordFn(s, errs...)
+		}
+	)
+
+	if history.Actions == targetChainReceivedAction && history.Status == string(provider.TxStatusSuccess) {
+		log.Debugf("target chain received, order id: %s", history.Tx)
+		return provider.SwapResult{
+			ProviderType: b.Type(),
+			ProviderName: b.Name(),
+			OrderId:      history.Tx,
+			Status:       provider.TxStatusSuccess,
+			CurrentChain: args.TargetChain,
+			Tx:           history.Tx,
+		}, nil
+	}
+
+	if args.SourceChain == args.TargetChain && history.Status == string(provider.TxStatusSuccess) {
+		log.Debugf("source chain %s and target chain %s is same", args.SourceChain, args.TargetChain)
+		return provider.SwapResult{}, errors.Errorf("source chain %s and target chain %s is same", args.SourceChain, args.TargetChain)
+	}
+
+	actionNumber := Action2Int(history.Actions)
+	sourceChainConf := b.config.GetChainConfig(args.SourceChain)
+
+	sr := new(provider.SwapResult).
+		SetTokenInName(args.SourceToken).
+		SetTokenInChainName(args.SourceChain).
+		SetProviderName(b.Name()).
+		SetProviderType(b.Type()).
+		SetCurrentChain(args.SourceChain).
+		SetTx(args.LastHistory.Tx)
+
+	sh := &provider.SwapHistory{
+		ProviderName: b.Name(),
+		ProviderType: string(b.Type()),
+		Amount:       args.Amount,
+		CurrentChain: args.SourceChain,
+		Tx:           history.Tx,
+	}
+	isActionSuccess := history.Status == string(provider.TxStatusSuccess)
+	ctx = context.WithValue(ctx, constant.ChainNameKeyInCtx, args.SourceChain)
+
+	wallet := args.Sender
+	ethClient, err := chains.NewTryClient(ctx, sourceChainConf.RpcEndpoints)
+	if err != nil {
+		return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "dial rpc")
+	}
+	defer ethClient.Close()
+
+	log.Debugf("start transfer %s from %s to %s", args.SourceToken, args.SourceChain, args.TargetChain)
+
+	if actionNumber <= 1 && !isActionSuccess {
+		recordFn(sh.SetActions(sourceChainSendingAction).SetStatus(provider.TxStatusPending).Out())
+		sr = sr.SetReciever(args.Receiver)
+		ctx = provider.WithNotify(ctx, provider.WithNotifyParams{
+			OrderId:         args.OrderId,
+			Receiver:        common.HexToAddress(args.Receiver),
+			TokenIn:         args.SourceToken,
+			TokenOut:        args.TargetToken,
+			TokenInChain:    args.SourceChain,
+			TokenOutChain:   args.TargetChain,
+			ProviderName:    b.Name(),
+			TokenInAmount:   args.Amount,
+			TokenOutAmount:  args.Amount,
+			TransactionType: provider.TransferTransactionAction,
+		})
+		tx, err := buildL1ToL2Tx(ctx, args, ethClient)
+		if err != nil {
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "build tx")
+		}
+
+		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeArb12EthBridge)
+		txHash, err := wallet.SendTransaction(ctx, tx, ethClient)
+		if err != nil {
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "send tx")
+		}
+		recordFn(sh.SetActions(sourceChainSendingAction).SetStatus(provider.TxStatusSuccess).Out())
+		sh = sh.SetTx(txHash.Hex())
+		sr = sr.SetTx(txHash.Hex()).SetOrderId(txHash.Hex())
+	}
+
+	if actionNumber <= 2 && !isActionSuccess {
+		recordFn(sh.SetActions(sourceChainSentAction).SetStatus(provider.TxStatusPending).Out())
+		err = wallet.WaitTransaction(ctx, common.HexToHash(sr.Tx), ethClient)
+		if err != nil {
+			recordFn(sh.SetActions(sourceChainSentAction).SetStatus(provider.TxStatusPending).Out(), err)
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait for tx")
+		}
+		recordFn(sh.SetActions(sourceChainSentAction).SetStatus(provider.TxStatusSuccess).Out())
+	}
+
+	if actionNumber <= 4 && !isActionSuccess {
+		recordFn(sh.SetActions(targetChainSendingAction).SetStatus(provider.TxStatusPending).Out())
+		log.Debugf("waiting for bridge success")
+		tx, err := wallet.GetRealHash(ctx, common.HexToHash(sr.Tx), ethClient)
+		if err != nil {
+			recordFn(sh.SetActions(targetChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "get real tx hash")
+		}
+
+		childTx, err := b.WaitForBridgeSuccess(ctx, tx.Hex())
+		if err != nil {
+			recordFn(sh.SetActions(targetChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait for bridge success")
+		}
+		sr.SetOrder(childTx)
+
+		recordFn(sh.SetActions(targetChainReceivedAction).SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetToken).Out())
+		sr = sr.SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain)
+	}
+	return sr.SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain).Out(), nil
+}
+
+func (b *Ethereum2Arbitrum) WaitForBridgeSuccess(ctx context.Context, txHash string) (string, error) {
+	res, err := WaitForChildTransactionReceipt(ctx, txHash)
+	if err != nil {
+		return "", err
+	}
+	if res.Complete {
+		return res.Tx, nil
+	}
+	return "", errors.New("transaction not complete")
+}
+
+func (b *Ethereum2Arbitrum) Help() []string {
+	return []string{"See https://docs.arbitrum.io/build-decentralized-apps/token-bridging/bridge-tokens-programmatically/how-to-bridge-tokens-standard"}
+}
+
+func (b *Ethereum2Arbitrum) Name() string {
+	return "ethereum-arbitrum-bridge"
+}
+
+func (b *Ethereum2Arbitrum) Type() configs.ProviderType {
+	return configs.Bridge
+}

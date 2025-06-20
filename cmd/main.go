@@ -4,6 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"omni-balance/internal/daemons"
 	_ "omni-balance/internal/daemons/bot"
 	_ "omni-balance/internal/daemons/cross_chain"
@@ -15,6 +20,7 @@ import (
 	"omni-balance/utils/configs"
 	"omni-balance/utils/notice"
 	"omni-balance/utils/provider"
+	_ "omni-balance/utils/provider/bridge/arbitrum"
 	_ "omni-balance/utils/provider/bridge/bungee"
 	_ "omni-balance/utils/provider/bridge/darwinia"
 	_ "omni-balance/utils/provider/bridge/helix_liquidity_claim"
@@ -25,10 +31,6 @@ import (
 	_ "omni-balance/utils/provider/cex/gate"
 	_ "omni-balance/utils/provider/dex/uniswap"
 	_ "omni-balance/utils/wallets/multisig"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	log "omni-balance/utils/logging"
 

@@ -96,6 +96,15 @@ func GetTokenBalance(ctx context.Context, client simulated.Client, tokenAddress,
 	return WeiToEth(balance, cast.ToInt32(tokenDecimal[0])), nil
 }
 
+type SignTxType string
+
+const (
+	SignTxTypeTransfer       SignTxType = "transfer"
+	SignTxTypeEth2Arb1Bridge SignTxType = "eth-arb1-bridge"
+	SignTxTypeArb12EthBridge SignTxType = "arb1-eth-bridge"
+	SignTxTypeArb12EthClaim  SignTxType = "arb1-eth-claim"
+)
+
 func SignTx(tx *types.Transaction, privateKey string, chainId int64) (*types.Transaction, error) {
 	if !strings.HasPrefix(privateKey, "http") {
 		return nil, errors.New("only support enclave version")
