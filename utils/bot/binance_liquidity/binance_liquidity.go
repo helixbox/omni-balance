@@ -89,17 +89,19 @@ func (b BinanceLiquidity) Check(ctx context.Context, args bot.Params) ([]bot.Tas
 	if tokenConfig.Name == "" {
 		return nil, bot.Queue, errors.Errorf("%s tokne not found in config", args.Info.TokenName)
 	}
+
+	binanceBalance, err := b.Balance(ctx, args)
+	if err != nil {
+		return nil, bot.Queue, err
+	}
+
+	chainBalance, err := args.Info.Wallet.GetExternalBalance(ctx, common.HexToAddress(tokenConfig.ContractAddress), tokenConfig.Decimals, args.Client)
+	if err != nil {
+		return nil, bot.Queue, err
+	}
 	if isTarget2Binance {
-		binanceBalance, err := b.Balance(ctx, args)
-		if err != nil {
-			return nil, bot.Queue, err
-		}
 		balance = binanceBalance
 	} else {
-		chainBalance, err := args.Info.Wallet.GetExternalBalance(ctx, common.HexToAddress(tokenConfig.ContractAddress), tokenConfig.Decimals, args.Client)
-		if err != nil {
-			return nil, bot.Queue, err
-		}
 		balance = chainBalance
 	}
 
@@ -179,6 +181,10 @@ func (b BinanceLiquidity) Check(ctx context.Context, args bot.Params) ([]bot.Tas
 	}
 
 	if balance.LessThanOrEqual(threshold) && isTarget2Binance {
+		if chainBalance.LessThanOrEqual(amount) {
+			return nil, bot.Queue, errors.Wrap(err, "chain balance is less than amount")
+		}
+
 		if balance.Add(amount).LessThanOrEqual(threshold) {
 			newAmount := threshold.Add(threshold.Mul(decimal.RequireFromString("0.01")))
 			log.Infof("The binance current balance is %s, amount in config is %s, balance(%s) + amount(%s) <= threshold(%s), so set amount to %s", balance, amount, balance, amount, threshold, newAmount)
@@ -199,6 +205,10 @@ func (b BinanceLiquidity) Check(ctx context.Context, args bot.Params) ([]bot.Tas
 	}
 
 	if balance.LessThanOrEqual(threshold) && !isTarget2Binance {
+		if binanceBalance.LessThanOrEqual(amount) {
+			return nil, bot.Queue, errors.Wrap(err, "binance balance is less than amount")
+		}
+
 		if balance.Add(amount).LessThanOrEqual(threshold) {
 			newAmount := threshold.Add(threshold.Mul(decimal.RequireFromString("0.01")))
 			log.Infof("The chain current balance is %s, amount in config is %s, balance(%s) + amount(%s) <= threshold(%s), so set amount to %s", balance, amount, balance, amount, threshold, newAmount)

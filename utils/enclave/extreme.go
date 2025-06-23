@@ -23,7 +23,7 @@ type Meta struct {
 	GasLimit             uint64   `json:"gasLimit"`
 	MaxFeePerGas         *big.Int `json:"maxFeePerGas"`
 	MaxPriorityFeePerGas *big.Int `json:"maxPriorityFeePerGas"`
-	Value                *big.Int `json:"value,omitempty"`
+	Value                string   `json:"value,omitempty"`
 }
 
 type SignResponse struct {

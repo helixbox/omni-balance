@@ -1,6 +1,7 @@
 package enclave
 
 import (
+	"encoding/hex"
 	"math/big"
 
 	"omni-balance/utils/enclave/router/withdraw"
@@ -11,7 +12,7 @@ import (
 )
 
 type ArbitrumWithdrawRequest struct {
-	ArbitrumWithdraw ArbitrumWithdraw `json:"arbitrumWithdraw"`
+	ArbitrumWithdraw ArbitrumWithdraw `json:"arbWithdraw"`
 }
 
 func (a ArbitrumWithdrawRequest) GetRequestType() string {
@@ -21,8 +22,8 @@ func (a ArbitrumWithdrawRequest) GetRequestType() string {
 type ArbitrumWithdraw struct {
 	Token  common.Address `json:"l1Token"`
 	To     common.Address `json:"to"`
-	Amount *big.Int       `json:"amount"`
-	Data   []byte         `json:"data"`
+	Amount string         `json:"amount"`
+	Data   string         `json:"data"`
 	Meta   Meta           `json:"meta"`
 }
 
@@ -35,8 +36,8 @@ func (c *Client) SignArbitrumWithdraw(tx *types.Transaction, chainID int64) (*ty
 	withdraw := ArbitrumWithdraw{
 		Token:  token,
 		To:     receiver,
-		Amount: amount,
-		Data:   data,
+		Amount: amount.String(),
+		Data:   hex.EncodeToString(data),
 		Meta: Meta{
 			Nonce:                tx.Nonce(),
 			GasLimit:             tx.Gas(),
@@ -71,5 +72,5 @@ func GetWithdrawInfo(input []byte) (token, recever common.Address, amount *big.I
 		return common.Address{}, common.Address{}, nil, nil, errors.New("invalid number of args")
 	}
 
-	return args[0].(common.Address), args[1].(common.Address), args[2].(*big.Int), args[5].([]byte), nil
+	return args[0].(common.Address), args[1].(common.Address), args[2].(*big.Int), args[3].([]byte), nil
 }

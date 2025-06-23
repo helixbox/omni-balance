@@ -9,16 +9,14 @@ import (
 
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
+	"omni-balance/utils/enclave/router/withdraw"
 	"omni-balance/utils/wallets"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
 )
-
-const GATEWAY_ROUTER_ABI = `[{"inputs":[{"internalType":"address","name":"_l1Token","type":"address"},{"internalType":"address","name":"_to","type":"address"},{"internalType":"uint256","name":"_amount","type":"uint256"},{"internalType":"bytes","name":"_data","type":"bytes"}],"name":"outboundTransfer","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"nonpayable","type":"function"}]`
 
 const (
 	baseUrl = "http://127.0.0.1:3000"
@@ -126,7 +124,7 @@ func WaitForClaim(ctx context.Context, txHash string) (TxRequest, error) {
 	}
 
 	var result TxRequest
-	err = utils.Request(ctx, "POST", u.String(), bytes.NewReader(body), &result)
+	err = utils.RequestForever(ctx, "POST", u.String(), bytes.NewReader(body), &result)
 	if err != nil {
 		return TxRequest{}, errors.Wrap(err, "get claim tx request error")
 	}
@@ -135,9 +133,10 @@ func WaitForClaim(ctx context.Context, txHash string) (TxRequest, error) {
 }
 
 func Withdraw(ctx context.Context, l1Address, receiver common.Address, amount decimal.Decimal) ([]byte, error) {
-	contractAbi, err := abi.JSON(strings.NewReader(GATEWAY_ROUTER_ABI))
+	routerAbi, err := withdraw.WithdrawMetaData.GetAbi()
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
-	return contractAbi.Pack("outboundTransfer", l1Address, receiver, amount.BigInt(), "")
+
+	return routerAbi.Pack("outboundTransfer", l1Address, receiver, amount.BigInt(), []byte{})
 }

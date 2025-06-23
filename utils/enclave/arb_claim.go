@@ -11,7 +11,7 @@ import (
 )
 
 type ArbitrumClaimRequest struct {
-	ArbitrumClaim ArbitrumClaim `json:"arbitrumClaim"`
+	ArbitrumClaim ArbitrumClaim `json:"arbClaim"`
 }
 
 func (a ArbitrumClaimRequest) GetRequestType() string {
@@ -25,7 +25,7 @@ type ArbitrumClaim struct {
 	L2Block     *big.Int      `json:"l2Block"`
 	L1Block     *big.Int      `json:"l1Block"`
 	L2Timestamp *big.Int      `json:"l2Timestamp"`
-	Value       *big.Int      `json:"value"`
+	Value       string        `json:"value"`
 	Data        []byte        `json:"data"`
 	Meta        Meta          `json:"meta"`
 }
@@ -63,7 +63,7 @@ func BuildClaimRequest(input []byte, tx *types.Transaction) (ArbitrumClaimReques
 		L2Block:     args[4].(*big.Int),
 		L1Block:     args[5].(*big.Int),
 		L2Timestamp: args[6].(*big.Int),
-		Value:       args[7].(*big.Int),
+		Value:       args[7].(*big.Int).String(),
 		Data:        args[8].([]byte),
 		Meta: Meta{
 			Nonce:                tx.Nonce(),

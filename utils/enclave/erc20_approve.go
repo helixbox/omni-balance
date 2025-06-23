@@ -21,7 +21,7 @@ func (r ApproveReqeust) GetRequestType() string {
 type Erc20Approve struct {
 	Token   common.Address `json:"token"`
 	Spender common.Address `json:"spender"`
-	Amount  *big.Int       `json:"amount"`
+	Amount  string         `json:"amount"`
 	Meta    Meta           `json:"meta"`
 }
 
@@ -34,7 +34,7 @@ func (c *Client) SignErc20Approve(tx *types.Transaction, chainID int64) (*types.
 	approve := &Erc20Approve{
 		Token:   *tx.To(),
 		Spender: spender,
-		Amount:  amount,
+		Amount:  amount.String(),
 		Meta: Meta{
 			Nonce:                tx.Nonce(),
 			GasLimit:             tx.Gas(),

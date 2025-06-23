@@ -64,7 +64,7 @@ func buildL2ToL1Tx(ctx context.Context, args provider.SwapParams, client simulat
 
 	data, err := Withdraw(ctx, tokenConfig.l1Address, realWallet, amount)
 	if err != nil {
-		return nil, errors.Wrap(err, "deposit tx request")
+		return nil, errors.Wrap(err, "withdraw tx request")
 	}
 
 	return &types.DynamicFeeTx{
@@ -222,7 +222,7 @@ func (b *Arbitrum2Ethereum) Swap(ctx context.Context, args provider.SwapParams) 
 		claimTx, err := b.BuildClaimTx(ctx, tx.Hex())
 		if err != nil {
 			recordFn(sh.SetActions(targetChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)
-			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "build claim tx")
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait claim tx")
 		}
 		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeArb2EthClaim)
 		txHash, err := wallet.SendTransaction(ctx, claimTx, ethClient)
@@ -240,7 +240,7 @@ func (b *Arbitrum2Ethereum) Swap(ctx context.Context, args provider.SwapParams) 
 		err = wallet.WaitTransaction(ctx, common.HexToHash(sh.Tx), ethClient)
 		if err != nil {
 			recordFn(sh.SetActions(targetChainReceivedAction).SetStatus(provider.TxStatusFailed).Out(), err)
-			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait for tx")
+			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait for claim tx")
 		}
 		recordFn(sh.SetActions(targetChainReceivedAction).SetStatus(provider.TxStatusSuccess).Out())
 		sr.SetOrder(sh.Tx)

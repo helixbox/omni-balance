@@ -221,7 +221,7 @@ func (b *Ethereum2Arbitrum) Swap(ctx context.Context, args provider.SwapParams) 
 		}
 		sr.SetOrder(childTx).SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain)
 
-		recordFn(sh.SetActions(targetChainReceivedAction).SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetToken).Out())
+		recordFn(sh.SetActions(targetChainReceivedAction).SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain).Out())
 	}
 	return sr.Out(), nil
 }
