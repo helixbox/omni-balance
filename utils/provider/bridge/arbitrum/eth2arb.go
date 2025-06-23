@@ -23,7 +23,7 @@ var (
 	ethereum2arbitrum = map[string]tokenConfig{
 		"COW": {
 			l1Address: common.HexToAddress("0xDEf1CA1fb7FBcDC777520aa7f396b4E015F497aB"),
-			l2Address: common.HexToAddress("0xcb8b5CD20BdCaea9a010aC1F8d835824F5C87A04"),
+			l2Address: common.HexToAddress("0xc694a91e6b071bF030A18BD3053A7fE09B6DaE69"),
 			gateway:   common.HexToAddress("0xa3A7B6F88361F48403514059F1F16C8E78d60EeC"),
 		},
 	}
@@ -55,23 +55,15 @@ func buildL1ToL2Tx(ctx context.Context, args provider.SwapParams, client simulat
 		return nil, errors.Wrap(err, "approve")
 	}
 
-	txRequest, err := Deposit(ctx, tokenConfig.l1Address, realWallet, amount)
+	data, err := Deposit(ctx, tokenConfig.l1Address, tokenConfig.l2Address, realWallet, amount)
 	if err != nil {
 		return nil, errors.Wrap(err, "deposit tx request")
 	}
-
-	log.Debugf("tx request: %+v", txRequest)
-
-	toAddr := common.HexToAddress(txRequest.To)
-	value, ok := new(big.Int).SetString(txRequest.Value, 10)
-	if !ok {
-		return nil, errors.New("invalid value string")
-	}
 	return &types.DynamicFeeTx{
 		ChainID: big.NewInt(EthereumChianId),
-		To:      &toAddr,
-		Value:   value,
-		Data:    common.Hex2Bytes(strings.TrimPrefix(txRequest.Data, "0x")),
+		To:      &tokenConfig.bridge,
+		Value:   big.NewInt(0),
+		Data:    data,
 	}, nil
 }
 
@@ -162,7 +154,7 @@ func (b *Ethereum2Arbitrum) Swap(ctx context.Context, args provider.SwapParams) 
 	}
 	defer ethClient.Close()
 
-	log.Debugf("start transfer %s from %s to %s", args.SourceToken, args.SourceChain, args.TargetChain)
+	log.Debugf("start transfer %s from %s to %s, amount: %s", args.SourceToken, args.SourceChain, args.TargetChain, args.Amount.String())
 
 	if actionNumber <= 1 && !isActionSuccess {
 		recordFn(sh.SetActions(sourceChainSendingAction).SetStatus(provider.TxStatusPending).Out())

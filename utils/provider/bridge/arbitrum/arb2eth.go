@@ -168,7 +168,7 @@ func (b *Arbitrum2Ethereum) Swap(ctx context.Context, args provider.SwapParams) 
 	defer arbClient.Close()
 	defer ethClient.Close()
 
-	log.Debugf("start transfer %s from %s to %s", args.SourceToken, args.SourceChain, args.TargetChain)
+	log.Debugf("start transfer %s from %s to %s, amount: %s", args.SourceToken, args.SourceChain, args.TargetChain, args.Amount.String())
 
 	if actionNumber <= 1 && !isActionSuccess {
 		recordFn(sh.SetActions(sourceChainSendingAction).SetStatus(provider.TxStatusPending).Out())
