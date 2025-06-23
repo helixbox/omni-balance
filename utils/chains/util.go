@@ -99,11 +99,11 @@ func GetTokenBalance(ctx context.Context, client simulated.Client, tokenAddress,
 type SignTxType string
 
 const (
-	SignTxTypeApprove        SignTxType = "approve"
-	SignTxTypeTransfer       SignTxType = "transfer"
-	SignTxTypeEth2Arb1Bridge SignTxType = "eth-arb1-bridge"
-	SignTxTypeArb12EthBridge SignTxType = "arb1-eth-bridge"
-	SignTxTypeArb12EthClaim  SignTxType = "arb1-eth-claim"
+	SignTxTypeApprove       SignTxType = "approve"
+	SignTxTypeTransfer      SignTxType = "transfer"
+	SignTxTypeEth2ArbBridge SignTxType = "eth-arb-bridge"
+	SignTxTypeArb2EthBridge SignTxType = "arb-eth-bridge"
+	SignTxTypeArb2EthClaim  SignTxType = "arb-eth-claim"
 )
 
 func SignTx(tx *types.Transaction, privateKey string, chainId int64, signTxType SignTxType) (*types.Transaction, error) {
@@ -113,6 +113,8 @@ func SignTx(tx *types.Transaction, privateKey string, chainId int64, signTxType 
 
 	client := enclave.NewClient(privateKey)
 
+	log.Debugf("sign tx type: %s, chainId: %d", signTxType, chainId)
+
 	switch signTxType {
 	case SignTxTypeApprove:
 		return client.SignErc20Approve(tx, chainId)
@@ -121,11 +123,11 @@ func SignTx(tx *types.Transaction, privateKey string, chainId int64, signTxType 
 			return nil, errors.Wrap(error_types.ErrEnclaveNotSupportNativeToken, "enclave native token not support")
 		}
 		return client.SignErc20Transfer(tx, chainId)
-	case SignTxTypeEth2Arb1Bridge:
+	case SignTxTypeEth2ArbBridge:
 		return client.SignArbitrumDeposit(tx, chainId)
-	case SignTxTypeArb12EthBridge:
+	case SignTxTypeArb2EthBridge:
 		return client.SignArbitrumWithdraw(tx, chainId)
-	case SignTxTypeArb12EthClaim:
+	case SignTxTypeArb2EthClaim:
 		return client.SignArbitrumClaim(tx, chainId)
 	default:
 		return nil, errors.New("sign tx type not support")

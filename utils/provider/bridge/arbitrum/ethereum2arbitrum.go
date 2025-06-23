@@ -41,23 +41,26 @@ func NewL1ToL2(conf configs.Config, noInit ...bool) (provider.Provider, error) {
 	return &Ethereum2Arbitrum{config: conf}, nil
 }
 
-func buildL1ToL2Tx(ctx context.Context, args provider.SwapParams, client simulated.Client) (*types.DynamicFeeTx, error) {
+func buildL1ToL2Tx(ctx context.Context, args provider.SwapParams, client simulated.Client, decimals int32) (*types.DynamicFeeTx, error) {
 	var (
 		wallet      = args.Sender
 		realWallet  = wallet.GetAddress(true)
 		tokenConfig = ethereum2arbitrum[strings.ToUpper(args.SourceToken)]
 	)
+	amount := decimal.NewFromBigInt(chains.EthToWei(args.Amount, decimals), 0)
 
 	err := Approve(ctx, EthereumChianId, tokenConfig.l1Address, tokenConfig.gateway,
-		wallet, args.Amount, client)
+		wallet, amount, client)
 	if err != nil {
 		return nil, errors.Wrap(err, "approve")
 	}
 
-	txRequest, err := Deposit(ctx, tokenConfig.l1Address, realWallet, args.Amount)
+	txRequest, err := Deposit(ctx, tokenConfig.l1Address, realWallet, amount)
 	if err != nil {
 		return nil, errors.Wrap(err, "deposit tx request")
 	}
+
+	log.Debugf("tx request: %+v", txRequest)
 
 	toAddr := common.HexToAddress(txRequest.To)
 	value, ok := new(big.Int).SetString(txRequest.Value, 10)
@@ -68,7 +71,7 @@ func buildL1ToL2Tx(ctx context.Context, args provider.SwapParams, client simulat
 		ChainID: big.NewInt(EthereumChianId),
 		To:      &toAddr,
 		Value:   value,
-		Data:    common.Hex2Bytes(txRequest.Data),
+		Data:    common.Hex2Bytes(strings.TrimPrefix(txRequest.Data, "0x")),
 	}, nil
 }
 
@@ -131,6 +134,8 @@ func (b *Ethereum2Arbitrum) Swap(ctx context.Context, args provider.SwapParams) 
 
 	actionNumber := Action2Int(history.Actions)
 	sourceChainConf := b.config.GetChainConfig(args.SourceChain)
+	sourceToken := b.config.GetTokenInfoOnChain(args.SourceToken, args.SourceChain)
+	decimals := sourceToken.Decimals
 
 	sr := new(provider.SwapResult).
 		SetTokenInName(args.SourceToken).
@@ -174,12 +179,13 @@ func (b *Ethereum2Arbitrum) Swap(ctx context.Context, args provider.SwapParams) 
 			TokenOutAmount:  args.Amount,
 			TransactionType: provider.TransferTransactionAction,
 		})
-		tx, err := buildL1ToL2Tx(ctx, args, ethClient)
+		tx, err := buildL1ToL2Tx(ctx, args, ethClient, decimals)
 		if err != nil {
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "build tx")
 		}
 
-		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeArb12EthBridge)
+		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeEth2ArbBridge)
+		log.Debugf("waiting for send deposit tx.....")
 		txHash, err := wallet.SendTransaction(ctx, tx, ethClient)
 		if err != nil {
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "send tx")
@@ -213,12 +219,11 @@ func (b *Ethereum2Arbitrum) Swap(ctx context.Context, args provider.SwapParams) 
 			recordFn(sh.SetActions(targetChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait for bridge success")
 		}
-		sr.SetOrder(childTx)
+		sr.SetOrder(childTx).SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain)
 
 		recordFn(sh.SetActions(targetChainReceivedAction).SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetToken).Out())
-		sr = sr.SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain)
 	}
-	return sr.SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain).Out(), nil
+	return sr.Out(), nil
 }
 
 func (b *Ethereum2Arbitrum) WaitForBridgeSuccess(ctx context.Context, txHash string) (string, error) {

@@ -48,20 +48,21 @@ func NewL2ToL1(conf configs.Config, noInit ...bool) (provider.Provider, error) {
 	return &Arbitrum2Ethereum{config: conf}, nil
 }
 
-func buildL2ToL1Tx(ctx context.Context, args provider.SwapParams, client simulated.Client) (*types.DynamicFeeTx, error) {
+func buildL2ToL1Tx(ctx context.Context, args provider.SwapParams, client simulated.Client, decimals int32) (*types.DynamicFeeTx, error) {
 	var (
 		wallet      = args.Sender
 		realWallet  = wallet.GetAddress(true)
 		tokenConfig = arbitrum2ethereum[strings.ToUpper(args.SourceToken)]
 	)
+	amount := decimal.NewFromBigInt(chains.EthToWei(args.Amount, decimals), 0)
 
 	err := Approve(ctx, arbitrumChainId, tokenConfig.l2Address, tokenConfig.gateway,
-		wallet, args.Amount, client)
+		wallet, amount, client)
 	if err != nil {
 		return nil, errors.Wrap(err, "approve")
 	}
 
-	data, err := Withdraw(ctx, tokenConfig.l1Address, realWallet, args.Amount)
+	data, err := Withdraw(ctx, tokenConfig.l1Address, realWallet, amount)
 	if err != nil {
 		return nil, errors.Wrap(err, "deposit tx request")
 	}
@@ -134,6 +135,8 @@ func (b *Arbitrum2Ethereum) Swap(ctx context.Context, args provider.SwapParams) 
 	actionNumber := Action2Int(history.Actions)
 	sourceChainConf := b.config.GetChainConfig(args.SourceChain)
 	targetChainConf := b.config.GetChainConfig(args.TargetChain)
+	sourceToken := b.config.GetTokenInfoOnChain(args.SourceToken, args.SourceChain)
+	decimals := sourceToken.Decimals
 
 	sr := new(provider.SwapResult).
 		SetTokenInName(args.SourceToken).
@@ -182,12 +185,12 @@ func (b *Arbitrum2Ethereum) Swap(ctx context.Context, args provider.SwapParams) 
 			TokenOutAmount:  args.Amount,
 			TransactionType: provider.TransferTransactionAction,
 		})
-		tx, err := buildL2ToL1Tx(ctx, args, arbClient)
+		tx, err := buildL2ToL1Tx(ctx, args, arbClient, decimals)
 		if err != nil {
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "build tx")
 		}
 
-		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeArb12EthBridge)
+		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeArb2EthBridge)
 		txHash, err := wallet.SendTransaction(ctx, tx, arbClient)
 		if err != nil {
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "send tx")
@@ -221,7 +224,7 @@ func (b *Arbitrum2Ethereum) Swap(ctx context.Context, args provider.SwapParams) 
 			recordFn(sh.SetActions(targetChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "build claim tx")
 		}
-		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeArb12EthClaim)
+		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeArb2EthClaim)
 		txHash, err := wallet.SendTransaction(ctx, claimTx, ethClient)
 		if err != nil {
 			recordFn(sh.SetActions(targetChainSendingAction).SetStatus(provider.TxStatusFailed).Out())

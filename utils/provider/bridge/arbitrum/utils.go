@@ -20,6 +20,11 @@ import (
 
 const GATEWAY_ROUTER_ABI = `[{"inputs":[{"internalType":"address","name":"_l1Token","type":"address"},{"internalType":"address","name":"_to","type":"address"},{"internalType":"uint256","name":"_amount","type":"uint256"},{"internalType":"bytes","name":"_data","type":"bytes"}],"name":"outboundTransfer","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"nonpayable","type":"function"}]`
 
+const (
+	baseUrl = "http://127.0.0.1:3000"
+	// baseUrl = "http://common-rebalance"
+)
+
 type TxRequest struct {
 	From  string `json:"from"`
 	To    string `json:"to"`
@@ -48,7 +53,7 @@ func Approve(ctx context.Context, chainId int64, tokenAddress, spender common.Ad
 }
 
 func Deposit(ctx context.Context, l1Address, receiver common.Address, amount decimal.Decimal) (TxRequest, error) {
-	u, err := url.Parse("http://common-rebalance/rebalance/arb1-erc20-deposit")
+	u, err := url.Parse(baseUrl + "/rebalance/arb1-erc20-deposit")
 	if err != nil {
 		return TxRequest{}, errors.Wrap(err, "url parse error")
 	}
@@ -78,7 +83,7 @@ func Deposit(ctx context.Context, l1Address, receiver common.Address, amount dec
 }
 
 func WaitForChildTransactionReceipt(ctx context.Context, txHash string) (WaitResponse, error) {
-	u, err := url.Parse("http://common-rebalance/rebalance/wait-l2-tx-receipt")
+	u, err := url.Parse(baseUrl + "/rebalance/wait-l2-tx-receipt")
 	if err != nil {
 		return WaitResponse{}, errors.Wrap(err, "url parse error")
 	}
@@ -105,7 +110,7 @@ func WaitForChildTransactionReceipt(ctx context.Context, txHash string) (WaitRes
 type ClaimRequest struct{}
 
 func WaitForClaim(ctx context.Context, txHash string) (TxRequest, error) {
-	u, err := url.Parse("http://common-rebalance/rebalance/arb1-erc20-claim")
+	u, err := url.Parse(baseUrl + "/rebalance/arb1-erc20-claim")
 	if err != nil {
 		return TxRequest{}, errors.Wrap(err, "url parse error")
 	}

@@ -104,4 +104,3 @@ func (c *Client) signRequest(request RequestType, tx *types.Transaction, chainID
 func adjustSignature(sig []byte) {
 	sig[64] = sig[64] - 27
 }
-

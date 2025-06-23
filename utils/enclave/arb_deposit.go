@@ -11,7 +11,7 @@ import (
 )
 
 type ArbitrumDepositRequest struct {
-	ArbitrumDeposit ArbitrumDeposit `json:"arbitrumDeposit"`
+	ArbitrumDeposit ArbitrumDeposit `json:"arbDeposit"`
 }
 
 func (a ArbitrumDepositRequest) GetRequestType() string {
@@ -20,26 +20,27 @@ func (a ArbitrumDepositRequest) GetRequestType() string {
 
 type ArbitrumDeposit struct {
 	Token       common.Address `json:"token"`
+	To          common.Address `json:"to"`
 	Amount      *big.Int       `json:"amount"`
 	MaxGas      *big.Int       `json:"maxGas"`
 	GasPriceBid *big.Int       `json:"gasPriceBid"`
-	Data        []byte         `json:"data"`
-	Value       *big.Int       `json:"value"`
+	Data        string         `json:"data"`
 	Meta        Meta           `json:"meta"`
 }
 
 func (c *Client) SignArbitrumDeposit(tx *types.Transaction, chainID int64) (*types.Transaction, error) {
-	token, _, amount, maxGas, gasPrice, data, err := GetDepositInfo(tx.Data())
+	token, receiver, amount, maxGas, gasPrice, data, err := GetDepositInfo(tx.Data())
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
 
 	deposit := ArbitrumDeposit{
 		Token:       token,
+		To:          receiver,
 		Amount:      amount,
 		MaxGas:      maxGas,
 		GasPriceBid: gasPrice,
-		Data:        data,
+		Data:        common.Bytes2Hex(data),
 		Meta: Meta{
 			Nonce:                tx.Nonce(),
 			Value:                tx.Value(),

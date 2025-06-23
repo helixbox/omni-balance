@@ -19,21 +19,23 @@ func (a ArbitrumWithdrawRequest) GetRequestType() string {
 }
 
 type ArbitrumWithdraw struct {
-	Token  string `json:"token"`
-	Amount string `json:"amount"`
-	Data   []byte `json:"data"`
-	Meta   Meta   `json:"meta"`
+	Token  common.Address `json:"l1Token"`
+	To     common.Address `json:"to"`
+	Amount *big.Int       `json:"amount"`
+	Data   []byte         `json:"data"`
+	Meta   Meta           `json:"meta"`
 }
 
 func (c *Client) SignArbitrumWithdraw(tx *types.Transaction, chainID int64) (*types.Transaction, error) {
-	token, _, amount, data, err := GetWithdrawInfo(tx.Data())
+	token, receiver, amount, data, err := GetWithdrawInfo(tx.Data())
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
 
 	withdraw := ArbitrumWithdraw{
-		Token:  token.Hex(),
-		Amount: amount.String(),
+		Token:  token,
+		To:     receiver,
+		Amount: amount,
 		Data:   data,
 		Meta: Meta{
 			Nonce:                tx.Nonce(),
