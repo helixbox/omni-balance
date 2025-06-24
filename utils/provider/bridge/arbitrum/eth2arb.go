@@ -219,7 +219,7 @@ func (b *Ethereum2Arbitrum) Swap(ctx context.Context, args provider.SwapParams) 
 			recordFn(sh.SetActions(targetChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait for bridge success")
 		}
-		sr.SetOrder(childTx).SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain)
+		sr.SetTx(childTx).SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain)
 
 		recordFn(sh.SetActions(targetChainReceivedAction).SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain).Out())
 	}

@@ -213,7 +213,7 @@ func (b *Ethereum2Base) Swap(ctx context.Context, args provider.SwapParams) (res
 			recordFn(sh.SetActions(targetChainSendingAction).SetStatus(provider.TxStatusFailed).Out(), err)
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait for bridge success")
 		}
-		sr.SetOrder(childTx).SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain)
+		sr.SetTx(childTx).SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain)
 
 		recordFn(sh.SetActions(targetChainReceivedAction).SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain).Out())
 	}
@@ -221,17 +221,33 @@ func (b *Ethereum2Base) Swap(ctx context.Context, args provider.SwapParams) (res
 }
 
 func (b *Ethereum2Base) WaitForBridgeSuccess(ctx context.Context, txHash, trader string) (string, error) {
-	receiveTx, err := WaitForChildTransactionReceipt(ctx, txHash, trader)
-	if err != nil || receiveTx == "" {
-		timer := time.NewTimer(2 * time.Minute)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return "", ctx.Err()
-		case <-timer.C:
-			receiveTx, err = WaitForChildTransactionReceipt(ctx, txHash, trader)
-			log.Infof("wait for child transaction receipt, tx: %s, trader: %s, receiveTx: %s, err: %v", txHash, trader, receiveTx, err)
+	const maxRetries = 10
+	const retryInterval = 2 * time.Minute
+
+	var receiveTx string
+	var err error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		receiveTx, err = WaitForChildTransactionReceipt(ctx, txHash, trader)
+		if err == nil && receiveTx != "" {
+			return receiveTx, nil
 		}
+		if attempt < maxRetries-1 {
+			log.Infof("wait for child transaction receiptTx: %s, trader: %s, receiveTx: %s, err: %v, retrying in %v (attempt %d/%d)", txHash, trader, receiveTx, err, retryInterval, attempt+1, maxRetries)
+			timer := time.NewTimer(retryInterval)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return "", ctx.Err()
+			case <-timer.C:
+			}
+		}
+	}
+	if err != nil {
+		return "", err
+	}
+	if receiveTx == "" {
+		return "", errors.New("no receive tx")
 	}
 	return receiveTx, nil
 }
