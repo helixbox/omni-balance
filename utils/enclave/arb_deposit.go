@@ -3,7 +3,7 @@ package enclave
 import (
 	"math/big"
 
-	deposit "omni-balance/utils/enclave/router/deposit"
+	deposit "omni-balance/utils/enclave/router/arb/deposit"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"

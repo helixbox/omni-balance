@@ -28,6 +28,7 @@ var (
 		},
 	}
 	EthereumChianId int64 = 1
+	l1Router              = common.HexToAddress("0x72Ce9c846789fdB6fC1f34aC4AD25Dd9ef7031ef")
 )
 
 type Ethereum2Arbitrum struct {
@@ -55,15 +56,22 @@ func buildL1ToL2Tx(ctx context.Context, args provider.SwapParams, client simulat
 		return nil, errors.Wrap(err, "approve")
 	}
 
-	data, err := Deposit(ctx, tokenConfig.l1Address, tokenConfig.l2Address, realWallet, amount)
+	txRequest, err := Deposit(ctx, tokenConfig.l1Address, realWallet, amount)
 	if err != nil {
 		return nil, errors.Wrap(err, "deposit tx request")
 	}
+	log.Debugf("tx request: %+v", txRequest)
+
+	toAddr := common.HexToAddress(txRequest.To)
+	value, ok := new(big.Int).SetString(txRequest.Value, 10)
+	if !ok {
+		return nil, errors.New("invalid value string")
+	}
 	return &types.DynamicFeeTx{
 		ChainID: big.NewInt(EthereumChianId),
-		To:      &tokenConfig.bridge,
-		Value:   big.NewInt(0),
-		Data:    data,
+		To:      &toAddr,
+		Value:   value,
+		Data:    common.Hex2Bytes(strings.TrimPrefix(txRequest.Data, "0x")),
 	}, nil
 }
 

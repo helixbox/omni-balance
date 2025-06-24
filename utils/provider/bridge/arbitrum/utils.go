@@ -9,7 +9,7 @@ import (
 
 	"omni-balance/utils"
 	"omni-balance/utils/chains"
-	"omni-balance/utils/enclave/router/withdraw"
+	"omni-balance/utils/enclave/router/arb/withdraw"
 	"omni-balance/utils/wallets"
 
 	"github.com/ethereum/go-ethereum/common"

@@ -99,11 +99,12 @@ func GetTokenBalance(ctx context.Context, client simulated.Client, tokenAddress,
 type SignTxType string
 
 const (
-	SignTxTypeApprove       SignTxType = "approve"
-	SignTxTypeTransfer      SignTxType = "transfer"
-	SignTxTypeEth2ArbBridge SignTxType = "eth-arb-bridge"
-	SignTxTypeArb2EthBridge SignTxType = "arb-eth-bridge"
-	SignTxTypeArb2EthClaim  SignTxType = "arb-eth-claim"
+	SignTxTypeApprove        SignTxType = "approve"
+	SignTxTypeTransfer       SignTxType = "transfer"
+	SignTxTypeEth2ArbBridge  SignTxType = "eth-arb-bridge"
+	SignTxTypeArb2EthBridge  SignTxType = "arb-eth-bridge"
+	SignTxTypeArb2EthClaim   SignTxType = "arb-eth-claim"
+	SignTxTypeEth2BaseBridge SignTxType = "eth-base-bridge"
 )
 
 func SignTx(tx *types.Transaction, privateKey string, chainId int64, signTxType SignTxType) (*types.Transaction, error) {
@@ -129,6 +130,8 @@ func SignTx(tx *types.Transaction, privateKey string, chainId int64, signTxType 
 		return client.SignArbitrumWithdraw(tx, chainId)
 	case SignTxTypeArb2EthClaim:
 		return client.SignArbitrumClaim(tx, chainId)
+	case SignTxTypeEth2BaseBridge:
+		return client.SignBaseDeposit(tx, chainId)
 	default:
 		return nil, errors.New("sign tx type not support")
 	}

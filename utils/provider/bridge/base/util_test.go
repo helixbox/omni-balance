@@ -9,7 +9,6 @@ import (
 )
 
 func TestPollReceiveTxHash(t *testing.T) {
-	// 构造模拟API
 	depositTxHash := "0x6b1115f3ba8f76b42e483d1c0eb1300f18f750dd5404644c6dd20bd7b21771f6"
 	receiveTxHash := "0x4545b85ab81e87c12ab9d27a6342779b7c604270cfcc6c9988ccada61999b0db"
 

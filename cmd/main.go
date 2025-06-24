@@ -21,6 +21,7 @@ import (
 	"omni-balance/utils/notice"
 	"omni-balance/utils/provider"
 	_ "omni-balance/utils/provider/bridge/arbitrum"
+	_ "omni-balance/utils/provider/bridge/base"
 	_ "omni-balance/utils/provider/bridge/bungee"
 	_ "omni-balance/utils/provider/bridge/darwinia"
 	_ "omni-balance/utils/provider/bridge/helix_liquidity_claim"

@@ -8,6 +8,8 @@ import (
 	"net/http"
 
 	"omni-balance/utils/chains"
+	base_deposit "omni-balance/utils/enclave/router/base/deposit"
+	base_withdraw "omni-balance/utils/enclave/router/base/withdraw"
 	"omni-balance/utils/wallets"
 
 	log "omni-balance/utils/logging"
@@ -33,14 +35,23 @@ func Approve(ctx context.Context, chainId int64, tokenAddress, spender common.Ad
 	})
 }
 
-// func Deposit(ctx context.Context, l1Address, l2Address, receiver common.Address, amount decimal.Decimal) ([]byte, error) {
-// 	routerAbi, err := deposit.depositMetaData.GetAbi()
-// 	if err != nil {
-// 		return nil, errors.WithStack(err)
-// 	}
-//
-// 	return routerAbi.Pack("depositERC20To", l1Address, l2Address, receiver, big.NewInt(200000), amount.BigInt(), []byte{})
-// }
+func Deposit(ctx context.Context, l1Address, l2Address, receiver common.Address, amount decimal.Decimal) ([]byte, error) {
+	routerAbi, err := base_deposit.BaseDepositMetaData.GetAbi()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return routerAbi.Pack("depositERC20To", l1Address, l2Address, receiver, amount.BigInt(), uint32(200000), []byte{})
+}
+
+func Withdraw(ctx context.Context, l2Address, receiver common.Address, amount decimal.Decimal) ([]byte, error) {
+	routerAbi, err := base_withdraw.BaseWithdrawMetaData.GetAbi()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return routerAbi.Pack("withdrawTo", l2Address, receiver, amount.BigInt(), uint32(200000), []byte{})
+}
 
 // ~ curl 'https://api.superbridge.app/api/v5/bridge/activity' \
 //

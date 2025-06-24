@@ -34,7 +34,7 @@ var (
 		},
 	}
 	arbitrumChainId int64 = 42161
-	router                = common.HexToAddress("0x5288c571Fd7aD117beA99bF60FE0846C4E84F933")
+	l2Router              = common.HexToAddress("0x5288c571Fd7aD117beA99bF60FE0846C4E84F933")
 )
 
 type Arbitrum2Ethereum struct {
@@ -69,7 +69,7 @@ func buildL2ToL1Tx(ctx context.Context, args provider.SwapParams, client simulat
 
 	return &types.DynamicFeeTx{
 		ChainID: big.NewInt(arbitrumChainId),
-		To:      &router,
+		To:      &l2Router,
 		Value:   big.NewInt(0),
 		Data:    data,
 	}, nil

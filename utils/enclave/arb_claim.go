@@ -3,7 +3,7 @@ package enclave
 import (
 	"math/big"
 
-	"omni-balance/utils/enclave/router/outbox"
+	"omni-balance/utils/enclave/router/arb/outbox"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"

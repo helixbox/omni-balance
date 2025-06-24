@@ -50,8 +50,7 @@ func (b BalanceOnChain) Check(ctx context.Context, args bot.Params) ([]bot.Task,
 			info.Wallet.GetAddress(), balance, amount, balance, amount, threshold, newAmount)
 		amount = newAmount
 	}
-	log.Infof("balance on chain is not enough, start rebalance, current balance %s, threshold %s", balance.String(), threshold.String())
-	log.Debugf("balance on %s is not enough, start rebalance, current balance %s, threshold %s", info.Chain, balance.String(), threshold.String())
+	log.Infof("balance on %s is not enough, start rebalance, current balance %s, threshold %s", info.Chain, balance.String(), threshold.String())
 	tasks = append(tasks, bot.Task{
 		TokenOutChainName: args.Info.Chain,
 		Wallet:            info.Wallet.GetAddress().Hex(),

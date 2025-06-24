@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"math/big"
 
-	"omni-balance/utils/enclave/router/withdraw"
+	"omni-balance/utils/enclave/router/arb/withdraw"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
