@@ -21,12 +21,14 @@ func (a ArbitrumClaimRequest) GetRequestType() string {
 // bytes32[] proof,uint256 index,address l2Sender,address to,uint256 l2Block,uint256 l1Block,uint256 l2Timestamp,uint256 value,bytes data
 type ArbitrumClaim struct {
 	Proof       []common.Hash `json:"proof"`
-	Index       *big.Int      `json:"index"`
-	L2Block     *big.Int      `json:"l2Block"`
-	L1Block     *big.Int      `json:"l1Block"`
-	L2Timestamp *big.Int      `json:"l2Timestamp"`
+	Index       string        `json:"index"`
+	L2Sender    string        `json:"l2Sender"`
+	To          string        `json:"to"`
+	L2Block     string        `json:"l2Block"`
+	L1Block     string        `json:"l1Block"`
+	L2Timestamp string        `json:"l2Timestamp"`
 	Value       string        `json:"value"`
-	Data        []byte        `json:"data"`
+	Data        string        `json:"data"`
 	Meta        Meta          `json:"meta"`
 }
 
@@ -58,13 +60,15 @@ func BuildClaimRequest(input []byte, tx *types.Transaction) (ArbitrumClaimReques
 	}
 
 	claim := ArbitrumClaim{
-		Proof:       args[0].([]common.Hash),
-		Index:       args[1].(*big.Int),
-		L2Block:     args[4].(*big.Int),
-		L1Block:     args[5].(*big.Int),
-		L2Timestamp: args[6].(*big.Int),
+		Proof:       convertToCommonHashSlice(args[0].([][32]uint8)),
+		Index:       args[1].(*big.Int).String(),
+		L2Sender:    args[2].(common.Address).Hex(),
+		To:          args[3].(common.Address).Hex(),
+		L2Block:     args[4].(*big.Int).String(),
+		L1Block:     args[5].(*big.Int).String(),
+		L2Timestamp: args[6].(*big.Int).String(),
 		Value:       args[7].(*big.Int).String(),
-		Data:        args[8].([]byte),
+		Data:        common.Bytes2Hex(args[8].([]byte)),
 		Meta: Meta{
 			Nonce:                tx.Nonce(),
 			GasLimit:             tx.Gas(),
@@ -73,4 +77,13 @@ func BuildClaimRequest(input []byte, tx *types.Transaction) (ArbitrumClaimReques
 		},
 	}
 	return ArbitrumClaimRequest{ArbitrumClaim: claim}, nil
+}
+
+// convertToCommonHashSlice 将 [][32]uint8 转换为 []common.Hash
+func convertToCommonHashSlice(byteSlices [][32]uint8) []common.Hash {
+	result := make([]common.Hash, len(byteSlices))
+	for i, bytes := range byteSlices {
+		result[i] = common.BytesToHash(bytes[:])
+	}
+	return result
 }

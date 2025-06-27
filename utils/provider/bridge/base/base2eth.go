@@ -55,7 +55,7 @@ func (b *Base2Ethereum) GetCost(ctx context.Context, args provider.SwapParams) (
 		return provider.TokenInCosts{
 			provider.TokenInCost{
 				TokenName:  "ETH",
-				CostAmount: decimal.NewFromInt(0),
+				CostAmount: decimal.NewFromInt(2),
 			},
 		}, nil
 	}

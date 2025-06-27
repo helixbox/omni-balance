@@ -91,7 +91,7 @@ func (b *Arbitrum2Ethereum) GetCost(ctx context.Context, args provider.SwapParam
 		return provider.TokenInCosts{
 			provider.TokenInCost{
 				TokenName:  "ETH",
-				CostAmount: decimal.NewFromInt(0),
+				CostAmount: decimal.NewFromInt(1),
 			},
 		}, nil
 	}
@@ -263,7 +263,7 @@ func (b *Arbitrum2Ethereum) BuildClaimTx(ctx context.Context, txHash string) (*t
 		ChainID: big.NewInt(EthereumChianId),
 		To:      &toAddr,
 		Value:   value,
-		Data:    common.Hex2Bytes(txRequest.Data),
+		Data:    common.Hex2Bytes(strings.TrimPrefix(txRequest.Data, "0x")),
 	}, nil
 }
 
