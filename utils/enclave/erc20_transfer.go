@@ -21,7 +21,7 @@ func (s TransferRequest) GetRequestType() string {
 type Erc20Transfer struct {
 	Token    common.Address `json:"token"`
 	Receiver common.Address `json:"receiver"`
-	Amount   *big.Int       `json:"amount"`
+	Amount   string         `json:"amount"`
 	Meta     Meta           `json:"meta"`
 }
 
@@ -34,7 +34,7 @@ func buildTransferRequest(tx *types.Transaction) (*TransferRequest, error) {
 	transfer := &Erc20Transfer{
 		Token:    *tx.To(),
 		Receiver: receiver,
-		Amount:   amount,
+		Amount:   amount.String(),
 		Meta: Meta{
 			Nonce:                tx.Nonce(),
 			GasLimit:             tx.Gas(),
