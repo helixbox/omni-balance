@@ -15,7 +15,23 @@ type BaseProveRequest struct {
 }
 
 func (a BaseProveRequest) GetRequestType() string {
-	return "base_claim"
+	return "base_prove"
+}
+
+type WithdrawalTransaction struct {
+	Nonce    string         `json:"nonce"`
+	Sender   common.Address `json:"sender"`
+	Target   common.Address `json:"target"`
+	Value    string         `json:"value"`
+	GasLimit string         `json:"gasLimit"`
+	Data     string         `json:"data"`
+}
+
+type OutputRootProof struct {
+	Version                  common.Hash `json:"version"`
+	StateRoot                common.Hash `json:"stateRoot"`
+	MessagePasserStorageRoot common.Hash `json:"messagePasserStorageRoot"`
+	LatestBlockhash          common.Hash `json:"latestBlockhash"`
 }
 
 // function proveWithdrawalTransaction(
@@ -27,11 +43,11 @@ func (a BaseProveRequest) GetRequestType() string {
 //
 // );
 type BaseProve struct {
-	Tx               base_portal.TypesWithdrawalTransaction `json:"tx"`
-	DisputeGameIndex string                                 `json:"disputeGameIndex"`
-	OutputRootProof  base_portal.TypesOutputRootProof       `json:"outputRootProof"`
-	WithdrawalProof  []string                               `json:"withdrawalProof"`
-	Meta             Meta                                   `json:"meta"`
+	Tx               WithdrawalTransaction `json:"tx"`
+	DisputeGameIndex string                `json:"disputeGameIndex"`
+	OutputRootProof  OutputRootProof       `json:"outputRootProof"`
+	WithdrawalProof  []string              `json:"withdrawalProof"`
+	Meta             Meta                  `json:"meta"`
 }
 
 func (c *Client) SignBaseProve(tx *types.Transaction, chainID int64) (*types.Transaction, error) {
@@ -61,11 +77,26 @@ func BuildProveRequest(input []byte, tx *types.Transaction) (BaseProveRequest, e
 		return BaseProveRequest{}, errors.New("invalid number of args")
 	}
 
+	txw := args[0].(base_portal.TypesWithdrawalTransaction)
+	proof := args[2].(base_portal.TypesOutputRootProof)
+
 	prove := BaseProve{
-		Tx:               args[0].(base_portal.TypesWithdrawalTransaction),
+		Tx: WithdrawalTransaction{
+			Nonce:    txw.Nonce.String(),
+			Sender:   txw.Sender,
+			Target:   txw.Target,
+			Value:    txw.Value.String(),
+			GasLimit: txw.GasLimit.String(),
+			Data:     common.Bytes2Hex(txw.Data[:]),
+		},
 		DisputeGameIndex: args[1].(*big.Int).String(),
-		OutputRootProof:  args[2].(base_portal.TypesOutputRootProof),
-		WithdrawalProof:  convertToSlice(args[3].([][]byte)),
+		OutputRootProof: OutputRootProof{
+			Version:                  common.Hash(proof.Version),
+			StateRoot:                common.Hash(proof.StateRoot),
+			MessagePasserStorageRoot: common.Hash(proof.MessagePasserStorageRoot),
+			LatestBlockhash:          common.Hash(proof.LatestBlockhash),
+		},
+		WithdrawalProof: convertToSlice(args[3].([][]byte)),
 		Meta: Meta{
 			Nonce:                tx.Nonce(),
 			GasLimit:             tx.Gas(),

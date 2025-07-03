@@ -106,6 +106,8 @@ const (
 	SignTxTypeArb2EthClaim   SignTxType = "arb-eth-claim"
 	SignTxTypeEth2BaseBridge SignTxType = "eth-base-bridge"
 	SignTxTypeBase2EthBridge SignTxType = "base-eth-bridge"
+	SignTxTypeBase2EthProve  SignTxType = "base-eth-prove"
+	SignTxTypeBase2EthClaim  SignTxType = "base-eth-claim"
 )
 
 func SignTx(tx *types.Transaction, privateKey string, chainId int64, signTxType SignTxType) (*types.Transaction, error) {
@@ -135,6 +137,10 @@ func SignTx(tx *types.Transaction, privateKey string, chainId int64, signTxType 
 		return client.SignBaseDeposit(tx, chainId)
 	case SignTxTypeBase2EthBridge:
 		return client.SignBaseWithdraw(tx, chainId)
+	case SignTxTypeBase2EthProve:
+		return client.SignBaseProve(tx, chainId)
+	case SignTxTypeBase2EthClaim:
+		return client.SignBaseClaim(tx, chainId)
 	default:
 		return nil, errors.New("sign tx type not support")
 	}
