@@ -1,6 +1,8 @@
 package enclave
 
 import (
+	"encoding/json"
+
 	base_portal "omni-balance/utils/enclave/router/base/portal"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -14,15 +16,6 @@ type BaseClaimRequest struct {
 
 func (a BaseClaimRequest) GetRequestType() string {
 	return "base_claim"
-}
-
-type WithdrawalTransaction struct {
-	Nonce    string         `json:"nonce"`
-	Sender   common.Address `json:"sender"`
-	Target   common.Address `json:"target"`
-	Value    string         `json:"value"`
-	GasLimit string         `json:"gasLimit"`
-	Data     string         `json:"data"`
 }
 
 // function finalizeWithdrawalTransaction(WithdrawalTransaction memory tx);
@@ -49,16 +42,18 @@ func buildClaimRequest(input []byte, tx *types.Transaction) (BaseClaimRequest, e
 		return BaseClaimRequest{}, errors.WithStack(err)
 	}
 
-	args, err := portalAbi.Methods["finalizeWithdrawalTransaction"].Inputs.Unpack(input[4:])
+	args, err := portalAbi.Methods["finalizeWithdrawalTransactionExternalProof"].Inputs.Unpack(input[4:])
 	if err != nil {
 		return BaseClaimRequest{}, errors.Wrap(err, "unpack")
 	}
 
-	if len(args) != 1 {
+	if len(args) != 2 {
 		return BaseClaimRequest{}, errors.New("invalid number of args")
 	}
 
-	txw := args[0].(base_portal.TypesWithdrawalTransaction)
+	b, _ := json.Marshal(args[0])
+	var txw base_portal.TypesWithdrawalTransaction
+	json.Unmarshal(b, &txw)
 
 	prove := BaseClaim{
 		Tx: WithdrawalTransaction{
@@ -76,13 +71,6 @@ func buildClaimRequest(input []byte, tx *types.Transaction) (BaseClaimRequest, e
 			MaxPriorityFeePerGas: tx.GasTipCap(),
 		},
 	}
-	return BaseClaimRequest{BaseClaim: prove}, nil
-}
 
-func convertToSlice(byteSlices [][]byte) []string {
-	result := make([]string, len(byteSlices))
-	for i, bytes := range byteSlices {
-		result[i] = common.Bytes2Hex(bytes[:])
-	}
-	return result
+	return BaseClaimRequest{BaseClaim: prove}, nil
 }

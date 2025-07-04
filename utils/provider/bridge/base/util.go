@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
+	"time"
 
 	"omni-balance/utils/chains"
 	base_deposit "omni-balance/utils/enclave/router/base/deposit"
@@ -232,4 +235,219 @@ func WaitForChildTransactionReceipt(ctx context.Context, depositTxHash, trader s
 		}
 	}
 	return "", errors.New("receive transaction hash not found after polling")
+}
+
+func WaitForProve(ctx context.Context, withdrawTx, trader string) (string, error) {
+	// 先尝试一次
+	proveId, err := getProve(ctx, withdrawTx, trader)
+	if err != nil {
+		fmt.Println("getProve error:", err)
+	} else if proveId != "" {
+		proveData, err := getProveData(ctx, proveId, trader)
+		if err != nil {
+			fmt.Println("getProveDta error:", err)
+		} else {
+			return proveData, nil
+		}
+	}
+
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-ticker.C:
+			proveId, err := getProve(ctx, withdrawTx, trader)
+			if err != nil {
+				fmt.Println("getProve error:", err)
+				continue
+			}
+			if proveId != "" {
+				proveData, err := getProveData(ctx, proveId, trader)
+				if err != nil {
+					fmt.Println("getProveDta error:", err)
+					continue
+				}
+				return proveData, nil
+			}
+		}
+	}
+}
+
+func getProveData(ctx context.Context, proveId, trader string) (string, error) {
+	return getData(ctx, proveId, "op_prove")
+}
+
+func getClaimData(ctx context.Context, proveId, trader string) (string, error) {
+	return getData(ctx, proveId, "op_finalise")
+}
+
+//	curl 'https://api.superbridge.app/api/bridge/op_prove' \
+//		-H 'content-type: application/json' \
+//		-H 'origin: https://superbridge.app' \
+//		--data-raw '{"id":"dcbabefe-f203-4b1f-8420-4051a2af51b1"}'
+//
+// {"to":"0x49048044D57e1C92A77f79988d21Fa8fAF74E97e","data":"0x4870496f","chainId":1}⏎
+func getData(ctx context.Context, proveId string, method string) (string, error) {
+	url := "https://api.superbridge.app/api/bridge/op_prove"
+	headers := map[string]string{
+		"content-type": "application/json",
+		"origin":       "https://superbridge.app",
+	}
+	body := fmt.Sprintf(`{"id":"%s"}`, proveId)
+
+	for {
+		req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(body))
+		if err != nil {
+			return "", err
+		}
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			defer resp.Body.Close()
+			respBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return "", err
+			}
+			var result struct {
+				To      string `json:"to"`
+				Data    string `json:"data"`
+				ChainId uint32 `json:"chainId"`
+			}
+			if err := json.Unmarshal(respBytes, &result); err != nil {
+				return "", err
+			}
+			return result.Data, nil
+		}
+
+		if err != nil {
+			fmt.Println("getProveData http error:", err)
+		} else {
+			fmt.Println("getProveData status:", resp.Status)
+			resp.Body.Close()
+		}
+
+		// 10分钟后重试，或ctx被取消
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(10 * time.Minute):
+		}
+	}
+}
+
+func getProve(ctx context.Context, withdrawTx, trader string) (string, error) {
+	return getId(ctx, withdrawTx, trader, 3)
+}
+
+func getClaim(ctx context.Context, proveTx, trader string) (string, error) {
+	return getId(ctx, proveTx, trader, 5)
+}
+
+func getId(ctx context.Context, txHash, trader string, status uint32) (string, error) {
+	apiUrl := "https://api.superbridge.app/api/v5/bridge/activity"
+	requestBody := map[string]interface{}{
+		"evmAddress":    trader,
+		"deploymentIds": []string{"81883861-df09-4a49-816e-7268435d27eb"},
+	}
+	body, _ := json.Marshal(requestBody)
+
+	log.Infof("request: %s", string(body))
+
+	req, err := http.NewRequestWithContext(ctx, "POST", apiUrl, bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "https://superbridge.app")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	var activity struct {
+		Transactions []struct {
+			Id         string `json:"id"`
+			Type       string `json:"type"`
+			Status     uint32 `json:"status"`
+			Withdrawal struct {
+				TransactionHash string `json:"transactionHash"`
+			} `json:"withdrawal"`
+			Prove struct {
+				TransactionHash string `json:"transactionHash"`
+			} `json:"prove"`
+		} `json:"transactions"`
+	}
+	if err := json.Unmarshal(respBody, &activity); err != nil {
+		return "", err
+	}
+	log.Infof("response: %s", respBody)
+
+	for _, tx := range activity.Transactions {
+		if status == 3 {
+			if tx.Withdrawal.TransactionHash == txHash {
+				if tx.Status == status {
+					return tx.Id, nil
+				}
+			}
+		} else if status == 5 {
+			if tx.Prove.TransactionHash == txHash {
+				if tx.Status == status {
+					return tx.Id, nil
+				}
+			}
+		} else {
+			return "", errors.New("unknown state")
+		}
+	}
+	log.Infof("still waiting for get status %s", status)
+	return "", errors.New("still waiting for get status")
+}
+
+func WaitForClaim(ctx context.Context, proveTx, trader string) (string, error) {
+	// 先尝试一次
+	claimId, err := getClaim(ctx, proveTx, trader)
+	if err != nil {
+		fmt.Println("getClaim error:", err)
+	} else if claimId != "" {
+		claimData, err := getClaimData(ctx, claimId, trader)
+		if err != nil {
+			fmt.Println("getClaimDta error:", err)
+		} else {
+			return claimData, nil
+		}
+	}
+
+	ticker := time.NewTicker(6 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-ticker.C:
+			claimId, err := getClaim(ctx, proveTx, trader)
+			if err != nil {
+				fmt.Println("getClaim error:", err)
+				continue
+			}
+			if claimId != "" {
+				claimData, err := getClaimData(ctx, claimId, trader)
+				if err != nil {
+					fmt.Println("getClaimDta error:", err)
+					continue
+				}
+				return claimData, nil
+			}
+		}
+	}
 }

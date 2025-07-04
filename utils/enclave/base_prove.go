@@ -1,6 +1,7 @@
 package enclave
 
 import (
+	"encoding/json"
 	"math/big"
 
 	base_portal "omni-balance/utils/enclave/router/base/portal"
@@ -77,8 +78,16 @@ func BuildProveRequest(input []byte, tx *types.Transaction) (BaseProveRequest, e
 		return BaseProveRequest{}, errors.New("invalid number of args")
 	}
 
-	txw := args[0].(base_portal.TypesWithdrawalTransaction)
-	proof := args[2].(base_portal.TypesOutputRootProof)
+	b, _ := json.Marshal(args[0])
+	var txw base_portal.TypesWithdrawalTransaction
+	json.Unmarshal(b, &txw)
+
+	c, _ := json.Marshal(args[2])
+	var proof base_portal.TypesOutputRootProof
+	json.Unmarshal(c, &proof)
+
+	// txw := args[0].(base_portal.TypesWithdrawalTransaction)
+	// proof := args[2].(base_portal.TypesOutputRootProof)
 
 	prove := BaseProve{
 		Tx: WithdrawalTransaction{

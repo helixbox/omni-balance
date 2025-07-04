@@ -17,6 +17,13 @@ const (
 	sourceChainSentAction     = "sourceChainSent"
 	targetChainSendingAction  = "targetChainSending"
 	targetChainReceivedAction = "targetChainReceived"
+
+	state1 = "state1"
+	state2 = "state2"
+	state3 = "state3"
+	state4 = "state4"
+	state5 = "state5"
+	state6 = "state6"
 )
 
 func Action2Int(action string) int {
@@ -29,6 +36,18 @@ func Action2Int(action string) int {
 		return 3
 	case targetChainReceivedAction:
 		return 4
+	case state1:
+		return 1
+	case state2:
+		return 2
+	case state3:
+		return 3
+	case state4:
+		return 4
+	case state5:
+		return 5
+	case state6:
+		return 6
 	default:
 		return 0
 	}

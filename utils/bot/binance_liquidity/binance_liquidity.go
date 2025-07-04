@@ -42,7 +42,7 @@ func (b BinanceLiquidity) GetClient(config configs.Config) (*binance_connector.C
 		return nil, err
 	}
 	client := binance_connector.NewClient(c.Key, c.Secret)
-	// client.Debug = true
+	client.Debug = true
 	return client, nil
 }
 

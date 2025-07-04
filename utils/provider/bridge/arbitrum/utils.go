@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	baseUrl = "http://127.0.0.1:3000"
-	// baseUrl = "http://common-rebalance"
+	// baseUrl = "http://127.0.0.1:3000"
+	baseUrl = "http://common-rebalance"
 )
 
 type TxRequest struct {
