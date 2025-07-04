@@ -13,6 +13,7 @@ const (
 	AstarZkevm      = "astar-zkevm"
 	Aurora          = "aurora"
 	Avalanche       = "avalanche"
+	Binance         = "binance"
 	Base            = "base"
 	Blast           = "blast"
 	Bnb             = "bnb"
