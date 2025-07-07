@@ -2,10 +2,8 @@ package balance_on_chain
 
 import (
 	"context"
-	"strings"
 
 	"omni-balance/utils/bot"
-	"omni-balance/utils/constant"
 
 	log "omni-balance/utils/logging"
 
@@ -36,9 +34,6 @@ func (b BalanceOnChain) Check(ctx context.Context, args bot.Params) ([]bot.Task,
 		info   = args.Info
 		tasks  []bot.Task
 	)
-	if strings.ToLower(info.Chain) == constant.Binance {
-		return nil, "", errors.New("not support binance on balance_on_chain bot")
-	}
 	balance, err := b.Balance(ctx, args)
 	if err != nil {
 		return nil, "", errors.Wrap(err, "get balance error")

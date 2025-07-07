@@ -104,6 +104,7 @@ func (b BinanceLiquidity) Check(ctx context.Context, args bot.Params) ([]bot.Tas
 	} else {
 		balance = chainBalance
 	}
+	log.Debugf("binance balance: %s, chain balance: %s", binanceBalance.String(), chainBalance.String())
 
 	threshold := args.Conf.GetTokenThreshold(args.Info.Wallet.GetAddress().Hex(), args.Info.TokenName, args.Info.Chain)
 	if balance.GreaterThan(threshold) {
@@ -181,10 +182,6 @@ func (b BinanceLiquidity) Check(ctx context.Context, args bot.Params) ([]bot.Tas
 	}
 
 	if balance.LessThanOrEqual(threshold) && isTarget2Binance {
-		if chainBalance.LessThanOrEqual(amount) {
-			return nil, bot.Queue, errors.Wrap(err, "chain balance is less than amount")
-		}
-
 		if balance.Add(amount).LessThanOrEqual(threshold) {
 			newAmount := threshold.Add(threshold.Mul(decimal.RequireFromString("0.01")))
 			log.Infof("The binance current balance is %s, amount in config is %s, balance(%s) + amount(%s) <= threshold(%s), so set amount to %s", balance, amount, balance, amount, threshold, newAmount)
@@ -205,10 +202,6 @@ func (b BinanceLiquidity) Check(ctx context.Context, args bot.Params) ([]bot.Tas
 	}
 
 	if balance.LessThanOrEqual(threshold) && !isTarget2Binance {
-		if binanceBalance.LessThanOrEqual(amount) {
-			return nil, bot.Queue, errors.Wrap(err, "binance balance is less than amount")
-		}
-
 		if balance.Add(amount).LessThanOrEqual(threshold) {
 			newAmount := threshold.Add(threshold.Mul(decimal.RequireFromString("0.01")))
 			log.Infof("The chain current balance is %s, amount in config is %s, balance(%s) + amount(%s) <= threshold(%s), so set amount to %s", balance, amount, balance, amount, threshold, newAmount)
