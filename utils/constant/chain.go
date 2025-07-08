@@ -13,6 +13,7 @@ const (
 	AstarZkevm      = "astar-zkevm"
 	Aurora          = "aurora"
 	Avalanche       = "avalanche"
+	Binance         = "binance"
 	Base            = "base"
 	Blast           = "blast"
 	Bnb             = "bnb"
@@ -48,6 +49,7 @@ const (
 	LogKeyInCtx          ContextKey = "log"
 	NoticeFieldsKeyInCtx ContextKey = "notice_fields"
 	FeeTestKeyInCtx      ContextKey = "fee_test"
+	SignTxKeyInCtx       ContextKey = "sign_tx"
 )
 
 var (

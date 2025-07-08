@@ -450,7 +450,11 @@ func (s *Dsafe) ExecTransaction(ctx context.Context, tx Transaction, client simu
 		Data:  input,
 	})
 
-	signTx, err := chains.SignTx(chainTransaction, s.conf.PrivateKey, int64(s.GetChainIdByCtx(ctx)))
+	var signTxType chains.SignTxType = chains.SignTxTypeTransfer
+	if ctxKey := ctx.Value(constant.SignTxKeyInCtx); ctxKey != nil {
+		signTxType = ctxKey.(chains.SignTxType)
+	}
+	signTx, err := chains.SignTx(chainTransaction, s.conf.PrivateKey, int64(s.GetChainIdByCtx(ctx)), signTxType)
 	if err != nil {
 		return errors.Wrap(err, "sign tx error")
 	}

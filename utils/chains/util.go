@@ -96,15 +96,55 @@ func GetTokenBalance(ctx context.Context, client simulated.Client, tokenAddress,
 	return WeiToEth(balance, cast.ToInt32(tokenDecimal[0])), nil
 }
 
-func SignTx(tx *types.Transaction, privateKey string, chainId int64) (*types.Transaction, error) {
+type SignTxType string
+
+const (
+	SignTxTypeApprove        SignTxType = "approve"
+	SignTxTypeTransfer       SignTxType = "transfer"
+	SignTxTypeEth2ArbBridge  SignTxType = "eth-arb-bridge"
+	SignTxTypeArb2EthBridge  SignTxType = "arb-eth-bridge"
+	SignTxTypeArb2EthClaim   SignTxType = "arb-eth-claim"
+	SignTxTypeEth2BaseBridge SignTxType = "eth-base-bridge"
+	SignTxTypeBase2EthBridge SignTxType = "base-eth-bridge"
+	SignTxTypeBase2EthProve  SignTxType = "base-eth-prove"
+	SignTxTypeBase2EthClaim  SignTxType = "base-eth-claim"
+)
+
+func SignTx(tx *types.Transaction, privateKey string, chainId int64, signTxType SignTxType) (*types.Transaction, error) {
 	if !strings.HasPrefix(privateKey, "http") {
 		return nil, errors.New("only support enclave version")
 	}
+
 	client := enclave.NewClient(privateKey)
-	if tx.Value().Cmp(big.NewInt(0)) > 0 {
-		return nil, errors.Wrap(error_types.ErrEnclaveNotSupportNativeToken, "enclave native token not support")
+
+	log.Debugf("sign tx type: %s, chainId: %d", signTxType, chainId)
+
+	switch signTxType {
+	case SignTxTypeApprove:
+		return client.SignErc20Approve(tx, chainId)
+	case SignTxTypeTransfer:
+		if tx.Value().Cmp(big.NewInt(0)) > 0 {
+			return nil, errors.Wrap(error_types.ErrEnclaveNotSupportNativeToken, "enclave native token not support")
+		}
+		return client.SignErc20Transfer(tx, chainId)
+	case SignTxTypeEth2ArbBridge:
+		return client.SignArbitrumDeposit(tx, chainId)
+	case SignTxTypeArb2EthBridge:
+		return client.SignArbitrumWithdraw(tx, chainId)
+	case SignTxTypeArb2EthClaim:
+		return client.SignArbitrumClaim(tx, chainId)
+	case SignTxTypeEth2BaseBridge:
+		return client.SignBaseDeposit(tx, chainId)
+	case SignTxTypeBase2EthBridge:
+		return client.SignBaseWithdraw(tx, chainId)
+	case SignTxTypeBase2EthProve:
+		return client.SignBaseProve(tx, chainId)
+	case SignTxTypeBase2EthClaim:
+		return client.SignBaseClaim(tx, chainId)
+	default:
+		return nil, errors.New("sign tx type not support")
 	}
-	return client.SignErc20Transfer(tx, chainId)
+	return nil, errors.New("sign tx type not support")
 }
 
 func SignMsg(msg []byte, privateKey string) (sig []byte, err error) {
@@ -178,6 +218,7 @@ func TokenApprove(ctx context.Context, args TokenApproveParams) error {
 		return errors.Wrap(err, "abi pack")
 	}
 
+	ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, SignTxTypeApprove)
 	txHash, err := args.SendTransaction(ctx, &types.DynamicFeeTx{
 		To:   &args.TokenAddress,
 		Data: input,
@@ -300,7 +341,12 @@ func SendTransaction(ctx context.Context, client simulated.Client, tx *types.Dyn
 	if err != nil {
 		return common.Hash{}, errors.Wrap(err, "get chain id")
 	}
-	transaction, err := SignTx(types.NewTx(tx), privateKey, chainId.Int64())
+
+	var signTxType SignTxType = SignTxTypeTransfer
+	if ctxKey := ctx.Value(constant.SignTxKeyInCtx); ctxKey != nil {
+		signTxType = ctxKey.(SignTxType)
+	}
+	transaction, err := SignTx(types.NewTx(tx), privateKey, chainId.Int64(), signTxType)
 	if err != nil {
 		return common.Hash{}, errors.Wrap(err, "sign tx")
 	}

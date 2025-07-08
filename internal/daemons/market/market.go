@@ -3,6 +3,10 @@ package market
 import (
 	"context"
 	"fmt"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"omni-balance/internal/daemons"
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
@@ -12,9 +16,6 @@ import (
 	"omni-balance/utils/configs"
 	"omni-balance/utils/notice"
 	"omni-balance/utils/provider"
-	"sync"
-	"sync/atomic"
-	"time"
 
 	log "omni-balance/utils/logging"
 
@@ -154,7 +155,7 @@ func do(ctx context.Context, order models.Order, conf configs.Config) {
 	defer cancel()
 	utils.Go(func() {
 		defer cancel()
-		var t = time.NewTicker(time.Second * 5)
+		t := time.NewTicker(time.Second * 5)
 		defer t.Stop()
 		for {
 			select {
@@ -370,7 +371,7 @@ func generateOrderByWalletMode(ctx context.Context, order models.Order, conf con
 		if len(bots) == 0 {
 			bots = append(bots, "balance_on_chain")
 		}
-		var total = decimal.Zero
+		total := decimal.Zero
 		for _, botType := range bots {
 			balance, err := bot.GetBot(botType).Balance(ctx, bot.Params{
 				Conf: conf,

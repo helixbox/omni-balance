@@ -26,9 +26,7 @@ import (
 	"gorm.io/datatypes"
 )
 
-var (
-	index atomic.Int64
-)
+var index atomic.Int64
 
 func GetNextIndex(v int) int {
 	if v <= 0 {
@@ -47,7 +45,7 @@ func GetNextIndexStrings(v []string) string {
 func ExtractTagFromStruct(s interface{}, tags ...string) map[string]map[string]string {
 	t := reflect.TypeOf(s)
 	t = t.Elem()
-	var result = make(map[string]map[string]string)
+	result := make(map[string]map[string]string)
 	n := t.NumField()
 	for i := 0; i < n; i++ {
 		field := t.Field(i)
@@ -129,6 +127,53 @@ func Choose[T any](arr []T) T {
 		return arr[0]
 	}
 	return arr[RandomNumberIn(0, len(arr)-1)]
+}
+
+func RequestForever(ctx context.Context, method string, url string, body io.Reader, dest interface{}, headers ...string) error {
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return errors.Wrap(err, "new request")
+	}
+	for i := 0; i < len(headers); i += 2 {
+		req.Header.Set(headers[i], headers[i+1])
+	}
+	if body != nil && req.Header.Get("content-type") == "" {
+		req.Header.Set("content-type", "application/json")
+	}
+	if req.Header.Get("accept") == "" {
+		req.Header.Set("accept", "application/json")
+	}
+	req = req.WithContext(ctx)
+	var resp *http.Response
+	for {
+		resp, err = new(http.Client).Do(req)
+		if errors.Is(err, context.Canceled) {
+			return context.Canceled
+		}
+		if err != nil {
+			time.Sleep(time.Hour)
+			continue
+		}
+		if dest == nil {
+			_ = resp.Body.Close()
+			return nil
+		}
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Debugf("read response failed: %s", err)
+			_ = resp.Body.Close()
+			time.Sleep(time.Hour)
+			continue
+		}
+		_ = resp.Body.Close()
+		if err := json.Unmarshal(data, dest); err != nil {
+			log.Debugf("read response failed: %s", err)
+			time.Sleep(time.Hour)
+			continue
+		}
+		return nil
+	}
+	return errors.Wrap(err, "request failed")
 }
 
 func Request(ctx context.Context, method string, url string, body io.Reader, dest interface{}, headers ...string) error {

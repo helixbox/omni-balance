@@ -206,7 +206,12 @@ func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.Dynami
 	}
 
 	txData := types.NewTx(tx)
-	txData, err = chains.SignTx(txData, p.getPrivateKey(), chainId.Int64())
+
+	var signTxType chains.SignTxType = chains.SignTxTypeTransfer
+	if ctxKey := ctx.Value(constant.SignTxKeyInCtx); ctxKey != nil {
+		signTxType = ctxKey.(chains.SignTxType)
+	}
+	txData, err = chains.SignTx(txData, p.getPrivateKey(), chainId.Int64(), signTxType)
 	if err != nil {
 		return common.Hash{}, errors.Wrap(err, "sign tx")
 	}

@@ -89,19 +89,22 @@ func (b BinanceLiquidity) Check(ctx context.Context, args bot.Params) ([]bot.Tas
 	if tokenConfig.Name == "" {
 		return nil, bot.Queue, errors.Errorf("%s tokne not found in config", args.Info.TokenName)
 	}
+
+	binanceBalance, err := b.Balance(ctx, args)
+	if err != nil {
+		return nil, bot.Queue, err
+	}
+
+	chainBalance, err := args.Info.Wallet.GetExternalBalance(ctx, common.HexToAddress(tokenConfig.ContractAddress), tokenConfig.Decimals, args.Client)
+	if err != nil {
+		return nil, bot.Queue, err
+	}
 	if isTarget2Binance {
-		binanceBalance, err := b.Balance(ctx, args)
-		if err != nil {
-			return nil, bot.Queue, err
-		}
 		balance = binanceBalance
 	} else {
-		chainBalance, err := args.Info.Wallet.GetExternalBalance(ctx, common.HexToAddress(tokenConfig.ContractAddress), tokenConfig.Decimals, args.Client)
-		if err != nil {
-			return nil, bot.Queue, err
-		}
 		balance = chainBalance
 	}
+	log.Debugf("binance balance: %s, chain balance: %s", binanceBalance.String(), chainBalance.String())
 
 	threshold := args.Conf.GetTokenThreshold(args.Info.Wallet.GetAddress().Hex(), args.Info.TokenName, args.Info.Chain)
 	if balance.GreaterThan(threshold) {

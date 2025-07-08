@@ -2,6 +2,8 @@ package market
 
 import (
 	"context"
+	"sync"
+
 	"omni-balance/internal/db"
 	"omni-balance/internal/models"
 	"omni-balance/utils/configs"
@@ -9,7 +11,6 @@ import (
 	"omni-balance/utils/provider"
 	"omni-balance/utils/provider/bridge/darwinia"
 	"omni-balance/utils/wallets"
-	"sync"
 
 	log "omni-balance/utils/logging"
 
@@ -25,8 +26,8 @@ var (
 )
 
 func createUpdateLog(ctx context.Context, order models.Order, result provider.SwapResult, conf configs.Config,
-	client simulated.Client) error {
-
+	client simulated.Client,
+) error {
 	wallet := conf.GetWallet(order.Wallet)
 	walletBalance := getWalletTokenBalance(ctx, wallet, order.TokenOutName, order.TargetChainName, conf, client)
 
@@ -55,8 +56,8 @@ func createUpdateLog(ctx context.Context, order models.Order, result provider.Sw
 }
 
 func getWalletTokenBalance(ctx context.Context, wallet wallets.Wallets, tokenName, chainName string,
-	conf configs.Config, client simulated.Client) decimal.Decimal {
-
+	conf configs.Config, client simulated.Client,
+) decimal.Decimal {
 	chainConfig := conf.GetChainConfig(chainName)
 	if len(chainConfig.RpcEndpoints) == 0 {
 		return decimal.Zero
@@ -175,7 +176,8 @@ func getBestProvider(ctx context.Context, order models.Order, conf configs.Confi
 }
 
 func providerSupportsOrder(ctx context.Context, p provider.Provider, order models.Order,
-	conf configs.Config) (provider.TokenInCosts, bool) {
+	conf configs.Config,
+) (provider.TokenInCosts, bool) {
 	tokenInCosts, err := p.GetCost(ctx, provider.SwapParams{
 		SourceToken:      order.TokenInName,
 		Sender:           conf.GetWallet(order.Wallet),

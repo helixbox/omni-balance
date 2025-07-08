@@ -494,7 +494,11 @@ func (s *Safe) ExecTransaction(ctx context.Context, tx Transaction, client simul
 		Data:     input,
 	})
 
-	signTx, err := chains.SignTx(chainTransaction, s.conf.Operator.PrivateKey, int64(s.GetChainIdByCtx(ctx)))
+	var signTxType chains.SignTxType = chains.SignTxTypeTransfer
+	if ctxKey := ctx.Value(constant.SignTxKeyInCtx); ctxKey != nil {
+		signTxType = ctxKey.(chains.SignTxType)
+	}
+	signTx, err := chains.SignTx(chainTransaction, s.conf.Operator.PrivateKey, int64(s.GetChainIdByCtx(ctx)), signTxType)
 	if err != nil {
 		return errors.Wrap(err, "sign tx error")
 	}
