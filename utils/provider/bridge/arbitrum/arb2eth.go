@@ -87,6 +87,22 @@ func (b *Arbitrum2Ethereum) CheckToken(_ context.Context, tokenName, tokenInChai
 }
 
 func (b *Arbitrum2Ethereum) GetCost(ctx context.Context, args provider.SwapParams) (provider.TokenInCosts, error) {
+	chain := constant.Arbitrum
+	chainConfig := b.config.GetChainConfig(chain)
+	client, err := chains.NewTryClient(ctx, chainConfig.RpcEndpoints)
+	if err != nil {
+		return nil, nil
+	}
+	defer client.Close()
+	token := b.config.GetTokenInfoOnChain(args.SourceToken, chain)
+	balance, err := args.Sender.GetExternalBalance(ctx, common.HexToAddress(token.ContractAddress), token.Decimals, client)
+	if err != nil {
+		return nil, nil
+	}
+	log.Debugf("check in get cost for %s from %s to %s, balance: %s, amount %s", args.SourceToken, chain, args.TargetChain, balance.String(), args.Amount.String())
+	if args.Amount.GreaterThan(balance) {
+		return nil, nil
+	}
 	if strings.ToLower(args.TargetChain) == constant.Ethereum {
 		return provider.TokenInCosts{
 			provider.TokenInCost{
