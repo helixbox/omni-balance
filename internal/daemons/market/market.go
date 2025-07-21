@@ -283,7 +283,7 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 		if !balance.GreaterThan(threshold) {
 			break
 		}
-		if strings.EqualFold(order.ProcessType, "Bridge") {
+		if strings.EqualFold(order.ProviderType, "Bridge") {
 			break
 		}
 		log.Debugf("%s balance on %s is enough, skip", v.Name, order.TargetChainName)
