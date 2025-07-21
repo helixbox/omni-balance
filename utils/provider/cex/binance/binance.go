@@ -170,6 +170,9 @@ func (g *Binance) Swap(ctx context.Context, args provider.SwapParams) (provider.
 		return sr.OutError(errors.Errorf("binance swap target chain must be set"))
 	}
 	if args.SourceChain == "" {
+		var bestChain string
+		var bestBalance decimal.Decimal
+
 		for _, v := range g.config.SourceTokens {
 			if v.Name != args.SourceToken {
 				continue
@@ -193,20 +196,33 @@ func (g *Binance) Swap(ctx context.Context, args provider.SwapParams) (provider.
 					return sr.OutError(errors.Errorf("token %s not found in chain %s", args.SourceToken, chainConfig.Name))
 				}
 				balance, err := args.Sender.GetExternalBalance(ctx, common.HexToAddress(token.ContractAddress), token.Decimals, ethClient)
+				ethClient.Close()
 				if err != nil {
 					ethClient.Close()
 					return sr.OutError(errors.Wrap(err, "get balance"))
 				}
-				ethClient.Close()
+
 				log.Infof("try to find source chain, chain: %s, balance: %s, amount: %s", chainConfig.Name, balance.String(), args.Amount.String())
-				if balance.LessThan(args.Amount) {
-					continue
+
+				// Only consider chains with sufficient balance
+				if balance.GreaterThanOrEqual(args.Amount) {
+					// Select chain with highest balance
+					if bestChain == "" || balance.GreaterThan(bestBalance) {
+						bestChain = chain
+						bestBalance = balance
+						args.SourceToken = tokenName
+					}
 				}
-				args.SourceToken = tokenName
-				args.SourceChain = chain
-				break
 			}
 		}
+
+		if bestChain != "" {
+			args.SourceChain = bestChain
+			log.Infof("selected source chain: %s with balance: %s", bestChain, bestBalance.String())
+		} else {
+			return sr.OutError(errors.Errorf("no source chain with sufficient balance found"))
+		}
+
 		args.SaveOrderFn(map[string]interface{}{
 			"source_chain_name": args.SourceChain,
 		})
