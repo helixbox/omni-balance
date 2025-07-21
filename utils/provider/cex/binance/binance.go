@@ -479,11 +479,15 @@ func (g *Binance) Swap(ctx context.Context, args provider.SwapParams) (provider.
 		withdrawOrderId := fmt.Sprintf("omniBalanceTo%s%s%s%s", args.SourceChain, args.TargetChain, args.TargetToken, uuid.New().String())
 		log.Infof("binance withdraw, orderid: %s, amount: %s, token: %s, chain: %s",
 			withdrawOrderId, args.Amount.String(), args.TargetToken, args.TargetChain)
+		network := args.TargetChain
+		if args.TargetChain == constant.Ethereum {
+			network = "ETH"
+		}
 		_, err = g.client.NewWithdrawService().
 			Address(args.Receiver).
 			Amount(args.Amount.Truncate(0).InexactFloat64()).
 			Coin(args.TargetToken).
-			Network(args.TargetChain).
+			Network(network).
 			WithdrawOrderId(withdrawOrderId).
 			Do(ctx)
 		if err != nil {
