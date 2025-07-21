@@ -3,6 +3,7 @@ package market
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -280,6 +281,9 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 		}
 		threshold := conf.GetTokenThreshold(order.Wallet, v.Name, order.TargetChainName)
 		if !balance.GreaterThan(threshold) {
+			break
+		}
+		if strings.EqualFold(order.ProcessType, "Bridge") {
 			break
 		}
 		log.Debugf("%s balance on %s is enough, skip", v.Name, order.TargetChainName)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"math/big"
 	"strings"
 
 	"omni-balance/utils/chains"
@@ -170,6 +171,8 @@ func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.Dynami
 		if err != nil {
 			return common.Hash{}, errors.Wrap(err, "suggest gas price")
 		}
+		gasPrice = new(big.Int).Mul(gasPrice, big.NewInt(11))
+		gasPrice = new(big.Int).Div(gasPrice, big.NewInt(10))
 		tx.GasFeeCap = gasPrice
 	}
 
@@ -178,6 +181,8 @@ func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.Dynami
 		if err != nil {
 			return common.Hash{}, errors.Wrap(err, "suggest gas tip")
 		}
+		tip = new(big.Int).Mul(tip, big.NewInt(11))
+		tip = new(big.Int).Div(tip, big.NewInt(10))
 		tx.GasTipCap = tip
 	}
 	if tx.Gas == 0 {
@@ -190,6 +195,8 @@ func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.Dynami
 		if err != nil {
 			return common.Hash{}, errors.Wrap(err, "get estimate gas")
 		}
+		gas = new(big.Int).Mul(gas, big.NewInt(13))
+		gas = new(big.Int).Div(gas, big.NewInt(10))
 		tx.Gas = gas
 	}
 	if tx.Nonce == 0 {
