@@ -195,7 +195,7 @@ func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.Dynami
 		if err != nil {
 			return common.Hash{}, errors.Wrap(err, "get estimate gas")
 		}
-		gas = gas * 13 / 10
+		gas = gas * 2
 		tx.Gas = gas
 	}
 	if tx.Nonce == 0 {
