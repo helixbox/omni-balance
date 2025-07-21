@@ -3,7 +3,6 @@ package market
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -283,8 +282,8 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 		if !balance.GreaterThan(threshold) {
 			break
 		}
-		if strings.EqualFold(order.ProviderType, "Bridge") {
-			break
+		if order.ProviderType == configs.Bridge {
+			continue
 		}
 		log.Debugf("%s balance on %s is enough, skip", v.Name, order.TargetChainName)
 		if err := order.Success(db.DB(), "", nil, balance); err != nil {
