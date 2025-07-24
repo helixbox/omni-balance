@@ -26,6 +26,10 @@ var (
 			l1Address: common.HexToAddress("0xDEf1CA1fb7FBcDC777520aa7f396b4E015F497aB"),
 			l2Address: common.HexToAddress("0xc694a91e6b071bF030A18BD3053A7fE09B6DaE69"),
 		},
+		"COMP": {
+			l1Address: common.HexToAddress("0xc00e94Cb662C3520282E6f5717214004A7f26888"),
+			l2Address: common.HexToAddress("0x9e1028f5f1d5ede59748ffcee5532509976840e0"),
+		},
 	}
 	baseChainId int64 = 8453
 	l2Router          = common.HexToAddress("0x4200000000000000000000000000000000000010")
@@ -47,7 +51,7 @@ func (b *Base2Ethereum) CheckToken(_ context.Context, tokenName, tokenInChainNam
 	_ decimal.Decimal,
 ) (bool, error) {
 	if strings.ToLower(tokenInChainName) == constant.Base && strings.ToLower(tokenOutChainName) == constant.Ethereum {
-		if strings.ToUpper(tokenName) == "COW" {
+		if base2ethereum[strings.ToUpper(tokenName)] != (tokenConfig{}) {
 			return true, nil
 		}
 	}
