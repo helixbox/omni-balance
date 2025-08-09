@@ -171,7 +171,7 @@ func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.Dynami
 		if err != nil {
 			return common.Hash{}, errors.Wrap(err, "suggest gas price")
 		}
-		gasPrice = new(big.Int).Mul(gasPrice, big.NewInt(15))
+		gasPrice = new(big.Int).Mul(gasPrice, big.NewInt(13))
 		gasPrice = new(big.Int).Div(gasPrice, big.NewInt(10))
 		tx.GasFeeCap = gasPrice
 	}
@@ -181,7 +181,7 @@ func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.Dynami
 		if err != nil {
 			return common.Hash{}, errors.Wrap(err, "suggest gas tip")
 		}
-		tip = new(big.Int).Mul(tip, big.NewInt(15))
+		tip = new(big.Int).Mul(tip, big.NewInt(13))
 		tip = new(big.Int).Div(tip, big.NewInt(10))
 		tx.GasTipCap = tip
 	}
