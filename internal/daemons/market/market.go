@@ -282,6 +282,9 @@ func processOrder(ctx context.Context, order models.Order, conf configs.Config) 
 		if !balance.GreaterThan(threshold) {
 			break
 		}
+		if order.ProviderType == configs.Bridge {
+			continue
+		}
 		log.Debugf("%s balance on %s is enough, skip", v.Name, order.TargetChainName)
 		if err := order.Success(db.DB(), "", nil, balance); err != nil {
 			return errors.Wrap(err, "update order success error")

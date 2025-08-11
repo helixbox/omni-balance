@@ -12,3 +12,4 @@ start.sh
 omni-balance
 config.yaml
 config_local.yaml
+config*.yaml
