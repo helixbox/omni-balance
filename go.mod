@@ -6,6 +6,8 @@ toolchain go1.24.0
 
 require (
 	github.com/antihax/optional v1.0.0
+	github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327
+	github.com/chromedp/chromedp v0.14.1
 	github.com/ethereum/go-ethereum v1.16.1
 	github.com/gateio/gateapi-go/v6 v6.67.0
 	github.com/glebarez/sqlite v1.11.0
@@ -38,8 +40,6 @@ require (
 )
 
 require (
-	github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327 // indirect
-	github.com/chromedp/chromedp v0.14.1 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/cockroachdb/fifo v0.0.0-20240606204812-0bbfbd93a7ce // indirect
 	github.com/crate-crypto/go-eth-kzg v1.3.0 // indirect
