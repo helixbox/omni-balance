@@ -13,6 +13,8 @@ import (
 	"omni-balance/utils/error_types"
 	"omni-balance/utils/locks"
 
+	logger "omni-balance/utils/logging"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -173,6 +175,7 @@ func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.Dynami
 		}
 		gasPrice = new(big.Int).Mul(gasPrice, big.NewInt(20))
 		gasPrice = new(big.Int).Div(gasPrice, big.NewInt(10))
+		logger.Infof("gas price: %s", gasPrice.String())
 		tx.GasFeeCap = gasPrice
 	}
 
@@ -183,6 +186,7 @@ func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.Dynami
 		}
 		tip = new(big.Int).Mul(tip, big.NewInt(20))
 		tip = new(big.Int).Div(tip, big.NewInt(10))
+		logger.Infof("gas tip: %s", tip.String())
 		tx.GasTipCap = tip
 	}
 	if tx.Gas == 0 {

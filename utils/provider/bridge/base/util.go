@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -419,7 +420,17 @@ func BypassCloudflare() (*http.Client, error) {
 		chromedp.Flag("headless", true),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("no-sandbox", true),
+		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("disable-setuid-sandbox", true),
 	}
+
+	// 检查环境变量中的 Chrome 路径（Docker 环境）
+	if chromePath := os.Getenv("CHROME_PATH"); chromePath != "" {
+		if _, err := os.Stat(chromePath); err == nil {
+			opts = append(opts, chromedp.ExecPath(chromePath))
+		}
+	}
+
 	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
 	defer allocCancel()
 
