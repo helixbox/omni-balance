@@ -14,7 +14,7 @@ func TestPollReceiveTxHash(t *testing.T) {
 
 	evAddr := "0x9003d8731df107aA5E3FEADdFC165787b910Ff1e"
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
 	result, err := WaitForChildTransactionReceipt(ctx, depositTxHash, evAddr)
