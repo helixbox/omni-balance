@@ -205,7 +205,7 @@ func (g *Binance) Swap(ctx context.Context, args provider.SwapParams) (provider.
 				log.Infof("try to find source chain, chain: %s, balance: %s, amount: %s", chainConfig.Name, balance.String(), args.Amount.String())
 
 				// Only consider chains with sufficient balance
-				if balance.GreaterThanOrEqual(args.Amount) {
+				if balance.GreaterThanOrEqual(decimal.NewFromInt(2).Mul(args.Amount)) {
 					// Select chain with highest balance
 					if bestChain == "" || balance.GreaterThan(bestBalance) {
 						bestChain = chain
