@@ -28,8 +28,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # 设置环境变量
-ENV CHROME_BIN=/headless-shell
-ENV CHROME_PATH=/headless-shell
+ENV CHROME_BIN=/usr/bin/headless-shell
+ENV CHROME_PATH=/usr/bin/headless-shell
 
 COPY --from=upx /omni-balance /omni-balance
 ENTRYPOINT ["/omni-balance"]
