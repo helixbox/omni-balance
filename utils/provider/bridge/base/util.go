@@ -39,7 +39,7 @@ const (
 
 	// 本地API配置
 	// baseURL = "http://localhost:3009"
-	baseUrl = "http://common-rebalance"
+	baseURL = "http://common-rebalance"
 
 	// API路径
 	rebalanceBaseERC20DepositPath = "/rebalance/base-erc20-deposit"
