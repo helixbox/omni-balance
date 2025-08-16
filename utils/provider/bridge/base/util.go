@@ -29,8 +29,20 @@ import (
 )
 
 const (
-	apiURL  = "https://api.superbridge.app/api/v6/bridge/activity"
-	homeURL = "https://superbridge.app/" // 用浏览器打开这个页面以触发 CF 挑战
+	// Superbridge API配置
+	superbridgeBaseURL = "https://api.superbridge.app"
+	superbridgeHomeURL = "https://superbridge.app"
+
+	// API路径
+	apiURL  = superbridgeBaseURL + "/api/v6/bridge/activity"
+	homeURL = superbridgeHomeURL + "/" // 用浏览器打开这个页面以触发 CF 挑战
+
+	// 本地API配置
+	// baseURL = "http://localhost:3009"
+	baseUrl = "http://common-rebalance"
+
+	// API路径
+	rebalanceBaseERC20DepositPath = "/rebalance/base-erc20-deposit"
 )
 
 var jsonBody = []byte(`{"id":{"tokensId":"895f6697-9cef-41d6-96ee-f3d9926f7a02"},"evmAddress":"0x9003d8731df107aA5E3FEADdFC165787b910Ff1e","cursor":null,"filters":{"type":"mainnets"},"multichainTokens":[]}`)
@@ -129,58 +141,60 @@ type Token struct {
 	USD         float64 `json:"usd"`
 }
 
+// curl http://localhost:3009/rebalance/base-erc20-deposit/0x7fdb54d91973eed12b2de36d165c9e2ee3f9e54871325f0fd544a6e3a534b1e1
+// 0x7adc7f454b38f4df4c16e9b07ba6d02215f728348b5770d0e1b9f1b18cb1b381
 func WaitForChildTransactionReceipt(ctx context.Context, depositTxHash, trader string) (string, error) {
-	// 获取绕过 Cloudflare 的客户端
-	client, err := BypassCloudflare()
+	// 根据注释，这个函数应该调用本地API来获取子交易收据
+	// 注释显示调用: http://localhost:3009/rebalance/base-erc20-deposit/{depositTxHash}
+	// 返回: 0x7adc7f454b38f4df4c16e9b07ba6d02215f728348b5870d0e1b9f1b18cb1b381
+
+	localAPIURL := fmt.Sprintf("%s%s/%s", baseURL, rebalanceBaseERC20DepositPath, depositTxHash)
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	req, err := http.NewRequest("GET", localAPIURL, nil)
 	if err != nil {
-		log.Errorf("绕过 Cloudflare 失败: %v", err)
-		// 如果绕过失败，回退到普通客户端
-		client = &http.Client{}
+		return "", fmt.Errorf("创建请求失败: %v", err)
 	}
 
-	requestBody := map[string]interface{}{
-		"id": map[string]interface{}{
-			"tokensId": "895f6697-9cef-41d6-96ee-f3d9926f7a02",
-		},
-		"evmAddress":       trader,
-		"cursor":           nil,
-		"filters":          map[string]interface{}{"type": "mainnets"},
-		"multichainTokens": []interface{}{},
-	}
-	body, _ := json.Marshal(requestBody)
-
-	log.Infof("request: %s", string(body))
-
-	req, err := http.NewRequest("POST", apiURL, bytes.NewReader(body))
-
-	if err != nil {
-		return "", err
-	}
+	// 设置请求头
+	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", "https://superbridge.app")
-	req.Header.Set("Referer", "https://superbridge.app/")
-	req.Header.Set("Accept", "application/json, text/plain, */*")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
 
+	// 发送请求
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("请求失败: %v", err)
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
-	var activity ActivityResponse
-	if err := json.Unmarshal(respBody, &activity); err != nil {
-		return "", err
+	// 读取响应
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("读取响应失败: %v", err)
 	}
-	log.Infof("response: %s", respBody)
 
-	for _, tx := range activity.Transactions {
-		if tx.Send.TransactionHash == depositTxHash {
-			return tx.Receive.TransactionHash, nil
-		}
+	// 打印响应体
+	fmt.Println(string(respBody))
+
+	// 检查HTTP状态码
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("API返回错误状态码: %d, 响应: %s", resp.StatusCode, string(respBody))
 	}
-	return "", errors.New("receive transaction hash not found after polling")
+
+	// 解析响应，根据注释返回的是交易哈希字符串
+	// 去除可能的空白字符
+	childTxHash := strings.TrimSpace(string(respBody))
+
+	// 验证返回的是否为有效的以太坊地址格式
+	if !strings.HasPrefix(childTxHash, "0x") || len(childTxHash) != 66 {
+		return "", fmt.Errorf("返回的子交易哈希格式无效: %s", childTxHash)
+	}
+
+	log.Infof("成功获取子交易收据: %s", childTxHash)
+	return childTxHash, nil
 }
 
 func WaitForProve(ctx context.Context, withdrawTx, trader string) (string, error) {
@@ -245,7 +259,7 @@ func getData(ctx context.Context, proveId string, method string) (string, error)
 		client = &http.Client{}
 	}
 
-	url := "https://api.superbridge.app/api/bridge/op_prove"
+	url := superbridgeBaseURL + "/api/bridge/op_prove"
 	body := fmt.Sprintf(`{"id":"%s"}`, proveId)
 
 	for {
@@ -255,8 +269,8 @@ func getData(ctx context.Context, proveId string, method string) (string, error)
 		}
 
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Origin", "https://superbridge.app")
-		req.Header.Set("Referer", "https://superbridge.app/")
+		req.Header.Set("Origin", superbridgeHomeURL)
+		req.Header.Set("Referer", superbridgeHomeURL+"/")
 		req.Header.Set("Accept", "application/json, text/plain, */*")
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
 
@@ -329,8 +343,8 @@ func getId(ctx context.Context, txHash, trader string, status uint32) (string, e
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", "https://superbridge.app")
-	req.Header.Set("Referer", "https://superbridge.app/")
+	req.Header.Set("Origin", superbridgeHomeURL)
+	req.Header.Set("Referer", superbridgeHomeURL+"/")
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
 
@@ -538,8 +552,8 @@ func MakeRequestWithCloudflareBypass() error {
 		return fmt.Errorf("构造请求失败: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", "https://superbridge.app")
-	req.Header.Set("Referer", "https://superbridge.app/")
+	req.Header.Set("Origin", superbridgeHomeURL)
+	req.Header.Set("Referer", superbridgeHomeURL+"/")
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
 	// 你还可以设置 sec-ch-ua 等 header，但一般不必要，关键是带上 cookie 和常见头
