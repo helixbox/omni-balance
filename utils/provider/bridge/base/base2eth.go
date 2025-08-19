@@ -31,9 +31,12 @@ var (
 			l2Address: common.HexToAddress("0x9e1028f5f1d5ede59748ffcee5532509976840e0"),
 		},
 	}
-	baseChainId int64 = 8453
-	l2Router          = common.HexToAddress("0x4200000000000000000000000000000000000010")
-	portal            = common.HexToAddress("0x49048044D57e1C92A77f79988d21Fa8fAF74E97e")
+	baseChainId        int64 = 8453
+	l2Router                 = common.HexToAddress("0x4200000000000000000000000000000000000010")
+	portal                   = common.HexToAddress("0x49048044D57e1C92A77f79988d21Fa8fAF74E97e")
+	disputeGameFactory       = common.HexToAddress("0x43edB88C4B80fDD2AdFF2412A7BebF9dF42cB40e")
+	l1RPC                    = "https://erpc.ringdao.com/main/evm/1"
+	l2RPC                    = "https://erpc.ringdao.com/main/evm/8453"
 )
 
 type Base2Ethereum struct {
