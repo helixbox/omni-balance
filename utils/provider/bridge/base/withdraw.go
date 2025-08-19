@@ -127,6 +127,7 @@ func (w *FPWithdrawer) ProveWithdrawal() ([]byte, error) {
 
 	params, err := withdrawals.ProveWithdrawalParametersFaultProofs(w.Ctx, l2g, l2, l2, w.L2TxHash, &w.Factory.DisputeGameFactoryCaller, &w.Portal.OptimismPortal2Caller)
 	if err != nil {
+		fmt.Printf("err: %+v\n", err)
 		return nil, errors.Wrap(err, "failed to get prove withdrawal parameters")
 	}
 	fmt.Printf("params: %+v\n", params)

@@ -156,7 +156,7 @@ func (b *Base2Ethereum) Swap(ctx context.Context, args provider.SwapParams) (res
 		SetProviderName(b.Name()).
 		SetProviderType(b.Type()).
 		SetCurrentChain(args.SourceChain).
-		SetTx(args.LastHistory.Tx)
+		SetTx(args.Tx)
 
 	sh := &provider.SwapHistory{
 		ProviderName: b.Name(),
@@ -231,12 +231,13 @@ func (b *Base2Ethereum) Swap(ctx context.Context, args provider.SwapParams) (res
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait claim tx")
 		}
 		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeBase2EthProve)
-		_, err = wallet.SendTransaction(ctx, proveTx, ethClient)
+		txHash, err := wallet.SendTransaction(ctx, proveTx, ethClient)
 		if err != nil {
 			recordFn(sh.SetActions(state3).SetStatus(provider.TxStatusFailed).Out())
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "send tx")
 		}
 		recordFn(sh.SetActions(state3).SetStatus(provider.TxStatusSuccess).Out())
+		sh = sh.SetTx(txHash.Hex())
 	}
 
 	if actionNumber <= 4 && !isActionSuccess {
@@ -251,7 +252,7 @@ func (b *Base2Ethereum) Swap(ctx context.Context, args provider.SwapParams) (res
 
 	if actionNumber <= 5 && !isActionSuccess {
 		recordFn(sh.SetActions(state5).SetStatus(provider.TxStatusPending).Out())
-		log.Debugf("waiting for claim, tx: %s", sr.Tx)
+		log.Debugf("waiting for claim, tx: %s, %s", sr.Tx, sh.Tx)
 		claimTx, err := b.BuildClaimTx(ctx, sr.Tx, args.Sender.GetAddress(true).Hex())
 		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeBase2EthClaim)
 		txHash, err := wallet.SendTransaction(ctx, claimTx, ethClient)
