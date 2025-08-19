@@ -1,9 +1,7 @@
 package base
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -181,204 +179,96 @@ func WaitForChildTransactionReceipt(ctx context.Context, depositTxHash, trader s
 	return childTxHash, nil
 }
 
-func WaitForProve(ctx context.Context, withdrawTx, trader string) (string, error) {
+func WaitForProve(ctx context.Context, withdrawTx, trader string) ([]byte, error) {
+	data, err := getProve(ctx, withdrawTx, trader)
+	if err == nil {
+		return data, nil
+	}
 
-	ticker := time.NewTicker(time.Hour)
+	ticker := time.NewTicker(time.Minute * 5)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return "", ctx.Err()
+			return nil, ctx.Err()
 		case <-ticker.C:
-			proveId, err := getProve(ctx, withdrawTx, trader)
+			data, err = getProve(ctx, withdrawTx, trader)
 			if err != nil {
-				fmt.Println("getProve error:", err)
+				log.Errorf("getProve error:", err)
 				continue
 			}
-			if proveId != "" {
-				proveData, err := getProveData(ctx, proveId, trader)
-				if err != nil {
-					fmt.Println("getProveDta error:", err)
-					continue
-				}
-				return proveData, nil
-			}
+			return data, nil
 		}
 	}
 }
 
-func getProveData(ctx context.Context, proveId, trader string) (string, error) {
-	return getData(ctx, proveId, "op_prove")
-}
-
-func getClaimData(ctx context.Context, proveId, trader string) (string, error) {
-	return getData(ctx, proveId, "op_finalise")
-}
-
-//	curl 'https://api.superbridge.app/api/bridge/op_prove' \
-//		-H 'content-type: application/json' \
-//		-H 'origin: https://superbridge.app' \
-//		--data-raw '{"id":"dcbabefe-f203-4b1f-8420-4051a2af51b1"}'
-//
-// {"to":"0x49048044D57e1C92A77f79988d21Fa8fAF74E97e","data":"0x4870496f","chainId":1}⏎
-func getData(ctx context.Context, proveId string, method string) (string, error) {
-	// 获取绕过 Cloudflare 的客户端
-	client := &http.Client{}
-
-	url := superbridgeBaseURL + "/api/bridge/op_prove"
-	body := fmt.Sprintf(`{"id":"%s"}`, proveId)
-
-	for {
-		req, err := http.NewRequest("POST", url, strings.NewReader(body))
-		if err != nil {
-			return "", err
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Origin", superbridgeHomeURL)
-		req.Header.Set("Referer", superbridgeHomeURL+"/")
-		req.Header.Set("Accept", "application/json, text/plain, */*")
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
-
-		resp, err := client.Do(req)
-		if err == nil && resp.StatusCode == http.StatusOK {
-			defer resp.Body.Close()
-			respBytes, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return "", err
-			}
-			var result struct {
-				To      string `json:"to"`
-				Data    string `json:"data"`
-				ChainId uint32 `json:"chainId"`
-			}
-			if err := json.Unmarshal(respBytes, &result); err != nil {
-				return "", err
-			}
-			return result.Data, nil
-		}
-
-		if err != nil {
-			fmt.Println("getProveData http error:", err)
-		} else {
-			fmt.Println("getProveData status:", resp.Status)
-			resp.Body.Close()
-		}
-
-		// 10分钟后重试，或ctx被取消
-		select {
-		case <-ctx.Done():
-			return "", ctx.Err()
-		case <-time.After(10 * time.Minute):
-		}
-	}
-}
-
-func getProve(ctx context.Context, withdrawTx, trader string) (string, error) {
+func getProve(ctx context.Context, withdrawTx, trader string) ([]byte, error) {
 	withdrawer, err := Withdrawer(common.HexToHash(withdrawTx))
 	if err != nil {
-		return "", errors.Wrap(err, "init withdrawer")
+		return nil, errors.Wrap(err, "init withdrawer")
+	}
+
+	isFinalized, err := withdrawer.IsProofFinalized()
+	if err != nil {
+		return nil, errors.Wrap(err, "Error querying withdrawal finalization status")
+	}
+	if isFinalized {
+		return nil, errors.New("withdrawal already proven")
 	}
 
 	err = withdrawer.CheckIfProvable()
 	if err != nil {
-		return "", errors.Wrap(err, "check provable")
+		return nil, errors.Wrap(err, "check provable")
 	}
 
 	proofTime, err := withdrawer.GetProvenWithdrawalTime()
 	if err != nil {
-		return "", errors.Wrap(err, "Error querying withdrawal proof")
+		return nil, errors.Wrap(err, "Error querying withdrawal proof")
 	}
 
 	if proofTime == 0 {
-		withdrawer.ProveWithdrawal()
-		// if err != nil {
-		// 	return "", errors.Wrap(err, "Error proving withdrawal")
-		// }
-
-		fmt.Println("The withdrawal has been successfully proven, finalization of the withdrawal can be done once the dispute game has finished and the finalization period has elapsed")
-		return "", nil
+		return withdrawer.ProveWithdrawal()
+	} else {
+		return nil, errors.New("proof time not zero")
 	}
-	return "", nil
 }
 
-func getClaim(ctx context.Context, proveTx, trader string) (string, error) {
-	return getId(ctx, proveTx, trader, 5)
+func getClaim(ctx context.Context, withdrawTx, trader string) ([]byte, error) {
+	withdrawer, err := Withdrawer(common.HexToHash(withdrawTx))
+	if err != nil {
+		return nil, errors.Wrap(err, "init withdrawer")
+	}
+
+	isFinalized, err := withdrawer.IsProofFinalized()
+	if err != nil {
+		return nil, errors.Wrap(err, "Error querying withdrawal finalization status")
+	}
+	if isFinalized {
+		return nil, errors.New("withdrawal already proven")
+	}
+
+	err = withdrawer.CheckIfProvable()
+	if err != nil {
+		return []byte{}, errors.Wrap(err, "check provable")
+	}
+
+	proofTime, err := withdrawer.GetProvenWithdrawalTime()
+	if err != nil {
+		return []byte{}, errors.Wrap(err, "Error querying withdrawal proof")
+	}
+
+	if proofTime == 0 {
+		return []byte{}, errors.New("proof time is zero")
+	} else {
+		return withdrawer.FinalizeWithdrawalData()
+	}
 }
 
-func getId(ctx context.Context, txHash, trader string, status uint32) (string, error) {
-	client := &http.Client{}
-
-	requestBody := map[string]interface{}{
-		"id": map[string]interface{}{
-			"tokensId": "895f6697-9cef-41d6-96ee-f3d9926f7a02",
-		},
-		"evmAddress":       trader,
-		"cursor":           nil,
-		"filters":          map[string]interface{}{"type": "mainnets"},
-		"multichainTokens": []interface{}{},
-	}
-	body, _ := json.Marshal(requestBody)
-
-	log.Infof("request: %s", string(body))
-
-	req, err := http.NewRequest("POST", apiURL, bytes.NewReader(body))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", superbridgeHomeURL)
-	req.Header.Set("Referer", superbridgeHomeURL+"/")
-	req.Header.Set("Accept", "application/json, text/plain, */*")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	respBody, _ := io.ReadAll(resp.Body)
-	var activity ActivityResponse
-	if err := json.Unmarshal(respBody, &activity); err != nil {
-		return "", err
-	}
-	log.Infof("response: %s", respBody)
-
-	for _, tx := range activity.Transactions {
-		if status == 3 {
-			if tx.Send.TransactionHash == txHash {
-				if tx.Send.Status == "confirmed" {
-					return tx.ID, nil
-				}
-			}
-		} else if status == 5 {
-			if tx.Receive.TransactionHash == txHash {
-				if tx.Receive.Status == "confirmed" {
-					return tx.ID, nil
-				}
-			}
-		} else {
-			return "", errors.New("unknown state")
-		}
-	}
-	log.Infof("still waiting for get status %d", status)
-	return "", errors.New("still waiting for get status")
-}
-
-func WaitForClaim(ctx context.Context, proveTx, trader string) (string, error) {
-	// 先尝试一次
-	claimId, err := getClaim(ctx, proveTx, trader)
-	if err != nil {
-		fmt.Println("getClaim error:", err)
-	} else if claimId != "" {
-		claimData, err := getClaimData(ctx, claimId, trader)
-		if err != nil {
-			fmt.Println("getClaimDta error:", err)
-		} else {
-			return claimData, nil
-		}
+func WaitForClaim(ctx context.Context, proveTx, trader string) ([]byte, error) {
+	data, err := getClaim(ctx, proveTx, trader)
+	if err == nil {
+		return data, nil 
 	}
 
 	ticker := time.NewTicker(6 * time.Hour)
@@ -387,21 +277,14 @@ func WaitForClaim(ctx context.Context, proveTx, trader string) (string, error) {
 	for {
 		select {
 		case <-ctx.Done():
-			return "", ctx.Err()
+			return nil, ctx.Err()
 		case <-ticker.C:
-			claimId, err := getClaim(ctx, proveTx, trader)
+			data, err = getClaim(ctx, proveTx, trader)
 			if err != nil {
 				fmt.Println("getClaim error:", err)
 				continue
 			}
-			if claimId != "" {
-				claimData, err := getClaimData(ctx, claimId, trader)
-				if err != nil {
-					fmt.Println("getClaimDta error:", err)
-					continue
-				}
-				return claimData, nil
-			}
+			return data, nil
 		}
 	}
 }

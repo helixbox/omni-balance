@@ -2,14 +2,12 @@ package base
 
 import (
 	"context"
-	"encoding/json"
 	"math/big"
 	"strings"
 
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/constant"
-	base_portal "omni-balance/utils/enclave/router/base/portal"
 	log "omni-balance/utils/logging"
 	"omni-balance/utils/provider"
 
@@ -36,7 +34,9 @@ var (
 	portal                   = common.HexToAddress("0x49048044D57e1C92A77f79988d21Fa8fAF74E97e")
 	disputeGameFactory       = common.HexToAddress("0x43edB88C4B80fDD2AdFF2412A7BebF9dF42cB40e")
 	l1RPC                    = "https://erpc.ringdao.com/main/evm/1"
-	l2RPC                    = "https://erpc.ringdao.com/main/evm/8453"
+	// l2RPC                    = "https://erpc.ringdao.com/main/evm/8453"
+	// l2RPC = "https://mainnet.base.org"
+	l2RPC = "https://dimensional-proportionate-daylight.base-mainnet.quiknode.pro/87ee57aa1f4e3ad70ddcaaf1ea313c88bfededa5/"
 )
 
 type Base2Ethereum struct {
@@ -231,13 +231,12 @@ func (b *Base2Ethereum) Swap(ctx context.Context, args provider.SwapParams) (res
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait claim tx")
 		}
 		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeBase2EthProve)
-		txHash, err := wallet.SendTransaction(ctx, proveTx, ethClient)
+		_, err = wallet.SendTransaction(ctx, proveTx, ethClient)
 		if err != nil {
 			recordFn(sh.SetActions(state3).SetStatus(provider.TxStatusFailed).Out())
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "send tx")
 		}
 		recordFn(sh.SetActions(state3).SetStatus(provider.TxStatusSuccess).Out())
-		sh = sh.SetTx(txHash.Hex())
 	}
 
 	if actionNumber <= 4 && !isActionSuccess {
@@ -281,13 +280,12 @@ func (b *Base2Ethereum) BuildProveTx(ctx context.Context, txHash, trader string)
 	if err != nil {
 		return nil, errors.Wrap(err, "prove tx data")
 	}
-	log.Debugf("prove tx data: %s", proveData)
 
 	return &types.DynamicFeeTx{
 		ChainID: big.NewInt(EthereumChianId),
 		To:      &portal,
 		Value:   big.NewInt(0),
-		Data:    common.Hex2Bytes(strings.TrimPrefix(proveData, "0x")),
+		Data:    proveData,
 	}, nil
 }
 
@@ -296,35 +294,12 @@ func (b *Base2Ethereum) BuildClaimTx(ctx context.Context, txHash, trader string)
 	if err != nil {
 		return nil, errors.Wrap(err, "claim tx data")
 	}
-	log.Debugf("claim tx data: %s", claimData)
-
-	portalAbi, err := base_portal.BasePortalMetaData.ParseABI()
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	input := common.Hex2Bytes(strings.TrimPrefix(claimData, "0x"))
-	if len(input) < 4 {
-		return nil, errors.New("data too short")
-	}
-	args, err := portalAbi.Methods["finalizeWithdrawalTransactionExternalProof"].Inputs.Unpack(input[4:])
-	if err != nil {
-		return nil, errors.Wrap(err, "unpack")
-	}
-	if len(args) != 2 {
-		return nil, errors.New("invalid number of args")
-	}
-	c, _ := json.Marshal(args[0])
-	var txw base_portal.TypesWithdrawalTransaction
-	json.Unmarshal(c, &txw)
-
-	data := base_portal.NewBasePortal().PackFinalizeWithdrawalTransaction(txw)
 
 	return &types.DynamicFeeTx{
 		ChainID: big.NewInt(EthereumChianId),
 		To:      &portal,
 		Value:   big.NewInt(0),
-		Data:    data,
+		Data:    claimData,
 	}, nil
 }
 

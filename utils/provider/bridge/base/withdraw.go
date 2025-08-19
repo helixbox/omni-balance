@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"time"
 
+	base_portal "omni-balance/utils/enclave/router/base/portal"
+
 	"github.com/ethereum-optimism/optimism/op-node/bindings"
 	bindingspreview "github.com/ethereum-optimism/optimism/op-node/bindings/preview"
 	"github.com/ethereum-optimism/optimism/op-node/withdrawals"
@@ -115,37 +117,67 @@ func (w *FPWithdrawer) GetProvenWithdrawalTime() (uint64, error) {
 	return provenWithdrawal.Timestamp, nil
 }
 
-// func (w *FPWithdrawer) ProveWithdrawal() (ProvenWithdrawalParameters, error) (TypesWithdrawalTransaction, *big.Int, TypesOutputRootProof, withdrawalProof) {
-func (w *FPWithdrawer) ProveWithdrawal() {
+func (w *FPWithdrawer) ProveWithdrawal() ([]byte, error) {
 	l2 := ethclient.NewClient(w.L2Client)
 	l2g := gethclient.New(w.L2Client)
 
 	params, err := withdrawals.ProveWithdrawalParametersFaultProofs(w.Ctx, l2g, l2, l2, w.L2TxHash, &w.Factory.DisputeGameFactoryCaller, &w.Portal.OptimismPortal2Caller)
 	if err != nil {
-		fmt.Printf("Error getting prove withdrawal parameters: %v\n", err)
+		return nil, errors.Wrap(err, "failed to get prove withdrawal parameters")
+	}
+	fmt.Printf("params: %+v\n", params)
+
+	portalAbi, err := base_portal.BasePortalMetaData.ParseABI()
+	if err != nil {
+		return nil, errors.WithStack(err)
 	}
 
-	fmt.Printf("params: %+v\n", params)
-	// create the proof
-	// tx, err := w.Portal.ProveWithdrawalTransaction(
-	// 	w.Opts,
-	// 	bindingspreview.TypesWithdrawalTransaction{
-	// 		Nonce:    params.Nonce,
-	// 		Sender:   params.Sender,
-	// 		Target:   params.Target,
-	// 		Value:    params.Value,
-	// 		GasLimit: params.GasLimit,
-	// 		Data:     params.Data,
-	// 	},
-	// 	params.L2OutputIndex, // this is overloaded and is the DisputeGame index in this context
-	// 	bindingspreview.TypesOutputRootProof{
-	// 		Version:                  params.OutputRootProof.Version,
-	// 		StateRoot:                params.OutputRootProof.StateRoot,
-	// 		MessagePasserStorageRoot: params.OutputRootProof.MessagePasserStorageRoot,
-	// 		LatestBlockhash:          params.OutputRootProof.LatestBlockhash,
-	// 	},
-	// 	params.WithdrawalProof,
-	// )
+	tx := base_portal.TypesWithdrawalTransaction{
+		Nonce:    params.Nonce,
+		Sender:   params.Sender,
+		Target:   params.Target,
+		Value:    params.Value,
+		GasLimit: params.GasLimit,
+		Data:     params.Data,
+	}
+
+	packedData, err := portalAbi.Pack("proveWithdrawalTransaction", tx, params.L2OutputIndex, params.OutputRootProof, params.WithdrawalProof)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to pack prove withdrawal transaction")
+	}
+
+	return packedData, nil
+}
+
+func (w *FPWithdrawer) FinalizeWithdrawalData() ([]byte, error) {
+	// get the WithdrawalTransaction info needed to finalize the withdrawal
+	l2 := ethclient.NewClient(w.L2Client)
+
+	// Transaction receipt
+	receipt, err := l2.TransactionReceipt(w.Ctx, w.L2TxHash)
+	if err != nil {
+		return nil, err
+	}
+	// Parse the receipt
+	ev, err := withdrawals.ParseMessagePassed(receipt)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("ev: %+v\n", ev)
+
+	basePortal, err := base_portal.BasePortalMetaData.ParseABI()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return basePortal.Pack("finalizeWithdrawalTransaction", base_portal.TypesWithdrawalTransaction{
+		Nonce:    ev.Nonce,
+		Sender:   ev.Sender,
+		Target:   ev.Target,
+		Value:    ev.Value,
+		GasLimit: ev.GasLimit,
+		Data:     ev.Data,
+	})
 }
 
 func (w *FPWithdrawer) IsProofFinalized() (bool, error) {
@@ -201,14 +233,6 @@ func (w *FPWithdrawer) FinalizeWithdrawal() error {
 	ctxWithTimeout, cancel := context.WithTimeout(w.Ctx, 5*time.Minute)
 	defer cancel()
 	return waitForConfirmation(ctxWithTimeout, w.L1Client, tx.Hash())
-}
-
-type WithdrawHelper interface {
-	CheckIfProvable() error
-	GetProvenWithdrawalTime() (uint64, error)
-	ProveWithdrawal() error
-	IsProofFinalized() (bool, error)
-	FinalizeWithdrawal() error
 }
 
 func txBlock(ctx context.Context, l2c *rpc.Client, l2TxHash common.Hash) (*big.Int, error) {
