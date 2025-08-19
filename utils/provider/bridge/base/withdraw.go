@@ -21,7 +21,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func Withdrawer(withdrawal common.Hash) (*FPWithdrawer, error) {
+func Withdrawer(withdrawal common.Hash, from common.Address) (*FPWithdrawer, error) {
 	ctx := context.Background()
 	l1Client, err := ethclient.DialContext(ctx, l1RPC)
 	if err != nil {
@@ -49,7 +49,9 @@ func Withdrawer(withdrawal common.Hash) (*FPWithdrawer, error) {
 		L2TxHash: withdrawal,
 		Portal:   portal,
 		Factory:  dgf,
-		Opts:     &bind.TransactOpts{},
+		Opts: &bind.TransactOpts{
+			From: from,
+		},
 	}, nil
 }
 
@@ -107,6 +109,8 @@ func (w *FPWithdrawer) GetProvenWithdrawalTime() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
+
+	fmt.Printf("hash: %s\n", hash.String())
 
 	// the proven withdrawal structure now contains an additional mapping, as withdrawal proofs are now stored per submitter address
 	provenWithdrawal, err := w.Portal.ProvenWithdrawals(&bind.CallOpts{}, hash, w.Opts.From)

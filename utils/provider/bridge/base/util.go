@@ -195,7 +195,7 @@ func WaitForProve(ctx context.Context, withdrawTx, trader string) ([]byte, error
 		case <-ticker.C:
 			data, err = getProve(ctx, withdrawTx, trader)
 			if err != nil {
-				log.Errorf("getProve error:", err)
+				log.Infof("等待prove: %v", err)
 				continue
 			}
 			return data, nil
@@ -204,7 +204,7 @@ func WaitForProve(ctx context.Context, withdrawTx, trader string) ([]byte, error
 }
 
 func getProve(ctx context.Context, withdrawTx, trader string) ([]byte, error) {
-	withdrawer, err := Withdrawer(common.HexToHash(withdrawTx))
+	withdrawer, err := Withdrawer(common.HexToHash(withdrawTx), common.HexToAddress(trader))
 	if err != nil {
 		return nil, errors.Wrap(err, "init withdrawer")
 	}
@@ -235,7 +235,7 @@ func getProve(ctx context.Context, withdrawTx, trader string) ([]byte, error) {
 }
 
 func getClaim(ctx context.Context, withdrawTx, trader string) ([]byte, error) {
-	withdrawer, err := Withdrawer(common.HexToHash(withdrawTx))
+	withdrawer, err := Withdrawer(common.HexToHash(withdrawTx), common.HexToAddress(trader))
 	if err != nil {
 		return nil, errors.Wrap(err, "init withdrawer")
 	}
@@ -268,7 +268,7 @@ func getClaim(ctx context.Context, withdrawTx, trader string) ([]byte, error) {
 func WaitForClaim(ctx context.Context, proveTx, trader string) ([]byte, error) {
 	data, err := getClaim(ctx, proveTx, trader)
 	if err == nil {
-		return data, nil 
+		return data, nil
 	}
 
 	ticker := time.NewTicker(6 * time.Hour)
