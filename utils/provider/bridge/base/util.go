@@ -261,6 +261,14 @@ func getClaim(ctx context.Context, withdrawTx, trader string) ([]byte, error) {
 	if proofTime == 0 {
 		return []byte{}, errors.New("proof time is zero")
 	} else {
+		// 检查是否已经过了7天
+		currentTime := time.Now().Unix()
+		sevenDaysInSeconds := uint64(7 * 24 * 60 * 60) // 7天的秒数
+		
+		if uint64(currentTime) < proofTime+sevenDaysInSeconds {
+			return []byte{}, errors.New("need to wait 7 days after proof time")
+		}
+		
 		return withdrawer.FinalizeWithdrawalData()
 	}
 }
