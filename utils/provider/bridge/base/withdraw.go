@@ -19,6 +19,38 @@ import (
 	"github.com/pkg/errors"
 )
 
+func Withdrawer(withdrawal common.Hash) (*FPWithdrawer, error) {
+	ctx := context.Background()
+	l1Client, err := ethclient.DialContext(ctx, l1RPC)
+	if err != nil {
+		return nil, fmt.Errorf("Error dialing L1 client: %w", err)
+	}
+	l2Client, err := rpc.DialContext(ctx, l2RPC)
+	if err != nil {
+		return nil, fmt.Errorf("Error dialing L2 client: %w", err)
+	}
+
+	portal, err := bindingspreview.NewOptimismPortal2(portal, l1Client)
+	if err != nil {
+		return nil, fmt.Errorf("Error binding OptimismPortal2 contract: %w", err)
+	}
+
+	dgf, err := bindings.NewDisputeGameFactory(disputeGameFactory, l1Client)
+	if err != nil {
+		return nil, fmt.Errorf("Error binding DisputeGameFactory contract: %w", err)
+	}
+
+	return &FPWithdrawer{
+		Ctx:      ctx,
+		L1Client: l1Client,
+		L2Client: l2Client,
+		L2TxHash: withdrawal,
+		Portal:   portal,
+		Factory:  dgf,
+		Opts:     &bind.TransactOpts{},
+	}, nil
+}
+
 type FPWithdrawer struct {
 	Ctx      context.Context
 	L1Client *ethclient.Client
@@ -83,45 +115,37 @@ func (w *FPWithdrawer) GetProvenWithdrawalTime() (uint64, error) {
 	return provenWithdrawal.Timestamp, nil
 }
 
-func (w *FPWithdrawer) ProveWithdrawal() error {
+// func (w *FPWithdrawer) ProveWithdrawal() (ProvenWithdrawalParameters, error) (TypesWithdrawalTransaction, *big.Int, TypesOutputRootProof, withdrawalProof) {
+func (w *FPWithdrawer) ProveWithdrawal() {
 	l2 := ethclient.NewClient(w.L2Client)
 	l2g := gethclient.New(w.L2Client)
 
 	params, err := withdrawals.ProveWithdrawalParametersFaultProofs(w.Ctx, l2g, l2, l2, w.L2TxHash, &w.Factory.DisputeGameFactoryCaller, &w.Portal.OptimismPortal2Caller)
 	if err != nil {
-		return err
+		fmt.Printf("Error getting prove withdrawal parameters: %v\n", err)
 	}
 
+	fmt.Printf("params: %+v\n", params)
 	// create the proof
-	tx, err := w.Portal.ProveWithdrawalTransaction(
-		w.Opts,
-		bindingspreview.TypesWithdrawalTransaction{
-			Nonce:    params.Nonce,
-			Sender:   params.Sender,
-			Target:   params.Target,
-			Value:    params.Value,
-			GasLimit: params.GasLimit,
-			Data:     params.Data,
-		},
-		params.L2OutputIndex, // this is overloaded and is the DisputeGame index in this context
-		bindingspreview.TypesOutputRootProof{
-			Version:                  params.OutputRootProof.Version,
-			StateRoot:                params.OutputRootProof.StateRoot,
-			MessagePasserStorageRoot: params.OutputRootProof.MessagePasserStorageRoot,
-			LatestBlockhash:          params.OutputRootProof.LatestBlockhash,
-		},
-		params.WithdrawalProof,
-	)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Proved withdrawal for %s: %s\n", w.L2TxHash.String(), tx.Hash().String())
-
-	// Wait 5 mins max for confirmation
-	ctxWithTimeout, cancel := context.WithTimeout(w.Ctx, 5*time.Minute)
-	defer cancel()
-	return waitForConfirmation(ctxWithTimeout, w.L1Client, tx.Hash())
+	// tx, err := w.Portal.ProveWithdrawalTransaction(
+	// 	w.Opts,
+	// 	bindingspreview.TypesWithdrawalTransaction{
+	// 		Nonce:    params.Nonce,
+	// 		Sender:   params.Sender,
+	// 		Target:   params.Target,
+	// 		Value:    params.Value,
+	// 		GasLimit: params.GasLimit,
+	// 		Data:     params.Data,
+	// 	},
+	// 	params.L2OutputIndex, // this is overloaded and is the DisputeGame index in this context
+	// 	bindingspreview.TypesOutputRootProof{
+	// 		Version:                  params.OutputRootProof.Version,
+	// 		StateRoot:                params.OutputRootProof.StateRoot,
+	// 		MessagePasserStorageRoot: params.OutputRootProof.MessagePasserStorageRoot,
+	// 		LatestBlockhash:          params.OutputRootProof.LatestBlockhash,
+	// 	},
+	// 	params.WithdrawalProof,
+	// )
 }
 
 func (w *FPWithdrawer) IsProofFinalized() (bool, error) {

@@ -180,51 +180,8 @@ func WaitForChildTransactionReceipt(ctx context.Context, depositTxHash, trader s
 	log.Infof("成功获取子交易收据: %s", childTxHash)
 	return childTxHash, nil
 }
-// func Withdrawer(withdrawal common.Hash) (*FPWithdrawer, error) {
-// 	ctx := context.Background()
-// 	l1Client, err := ethclient.DialContext(ctx, l1RPC)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("Error dialing L1 client: %w", err)
-// 	}
-// 	l2Client, err := rpc.DialContext(ctx, l2RPC)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("Error dialing L2 client: %w", err)
-// 	}
-
-// 	portal, err := bindingspreview.NewOptimismPortal2(portal, l1Client)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("Error binding OptimismPortal2 contract: %w", err)
-// 	}
-
-// 	dgf, err := bindings.NewDisputeGameFactory(common.HexToAddress(disputeGameFactory), l1Client)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("Error binding DisputeGameFactory contract: %w", err)
-// 	}
-
-// 	return &withdraw.FPWithdrawer{
-// 		Ctx:      ctx,
-// 		L1Client: l1Client,
-// 		L2Client: l2Client,
-// 		L2TxHash: withdrawal,
-// 		Portal:   portal,
-// 		Factory:  dgf,
-// 		Opts:     &bind.TransactOpts{},
-// 	}, nil
-// }
 
 func WaitForProve(ctx context.Context, withdrawTx, trader string) (string, error) {
-	// 先尝试一次
-	proveId, err := getProve(ctx, withdrawTx, trader)
-	if err != nil {
-		fmt.Println("getProve error:", err)
-	} else if proveId != "" {
-		proveData, err := getProveData(ctx, proveId, trader)
-		if err != nil {
-			fmt.Println("getProveDta error:", err)
-		} else {
-			return proveData, nil
-		}
-	}
 
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
@@ -319,7 +276,31 @@ func getData(ctx context.Context, proveId string, method string) (string, error)
 }
 
 func getProve(ctx context.Context, withdrawTx, trader string) (string, error) {
-	return getId(ctx, withdrawTx, trader, 3)
+	withdrawer, err := Withdrawer(common.HexToHash(withdrawTx))
+	if err != nil {
+		return "", errors.Wrap(err, "init withdrawer")
+	}
+
+	err = withdrawer.CheckIfProvable()
+	if err != nil {
+		return "", errors.Wrap(err, "check provable")
+	}
+
+	proofTime, err := withdrawer.GetProvenWithdrawalTime()
+	if err != nil {
+		return "", errors.Wrap(err, "Error querying withdrawal proof")
+	}
+
+	if proofTime == 0 {
+		withdrawer.ProveWithdrawal()
+		// if err != nil {
+		// 	return "", errors.Wrap(err, "Error proving withdrawal")
+		// }
+
+		fmt.Println("The withdrawal has been successfully proven, finalization of the withdrawal can be done once the dispute game has finished and the finalization period has elapsed")
+		return "", nil
+	}
+	return "", nil
 }
 
 func getClaim(ctx context.Context, proveTx, trader string) (string, error) {
@@ -424,4 +405,3 @@ func WaitForClaim(ctx context.Context, proveTx, trader string) (string, error) {
 		}
 	}
 }
-

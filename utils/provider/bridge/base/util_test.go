@@ -21,3 +21,15 @@ func TestPollReceiveTxHash(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, receiveTxHash, result)
 }
+
+func TestGetProve(t *testing.T) {
+	txHash := "0xf34da0e5596f64b6cfe218bb9b4576008c00d4577a2e34066431dbf1517289eb"
+	trader := "0xd1fc331dbf956e21da5c2d89caa2f98c80317d33"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	prove, err := getProve(ctx, txHash, trader)
+	require.NoError(t, err)
+	require.NotEmpty(t, prove)
+}
