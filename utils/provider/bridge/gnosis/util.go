@@ -3,25 +3,51 @@ package gnosis
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
 
+	"omni-balance/utils/chains"
 	gnosis_deposit "omni-balance/utils/enclave/router/gnosis/deposit"
+	"omni-balance/utils/erc20"
+	"omni-balance/utils/wallets"
 )
 
+func Approve(ctx context.Context, chainId int64, tokenAddress, spender common.Address, owner wallets.Wallets,
+	amount decimal.Decimal, client simulated.Client,
+) error {
+	return chains.TokenApprove(ctx, chains.TokenApproveParams{
+		ChainId:         chainId,
+		TokenAddress:    tokenAddress,
+		Owner:           owner.GetAddress(true),
+		SendTransaction: owner.SendTransaction,
+		WaitTransaction: owner.WaitTransaction,
+		Spender:         spender,
+		AmountWei:       amount,
+		Client:          client,
+	})
+}
+
 func Deposit(ctx context.Context, token, receiver common.Address, value decimal.Decimal, data []byte) ([]byte, error) {
-	routerAbi, err := gnosis_deposit.GnosisDepositMetaData.GetAbi()
+	routerAbi, err := gnosis_deposit.GnosisDepositMetaData.ParseABI()
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
 
 	return routerAbi.Pack("relayTokensAndCall", token, receiver, value, data)
+}
+
+func Withdraw(ctx context.Context, to common.Address, value decimal.Decimal, data []byte) ([]byte, error) {
+	erc1363Abi, err := erc20.Erc1363MetaData.GetAbi()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	return erc1363Abi.Pack("transferAndCall", to, value, data)
 }
 
 // 第一步请求 API ，通过 depositTxHash == transactionHash 获取对应的 id
@@ -76,10 +102,10 @@ type GraphQLResponse struct {
 			TransactionHash   string `json:"transactionHash"`
 			TransactionStatus string `json:"transactionStatus"`
 			Execution         *struct {
-				ID                string `json:"id"`
-				Timestamp         string `json:"timestamp"`
-				TransactionHash   string `json:"transactionHash"`
-				ValidatorAddr     string `json:"validatorAddr"`
+				ID              string `json:"id"`
+				Timestamp       string `json:"timestamp"`
+				TransactionHash string `json:"transactionHash"`
+				ValidatorAddr   string `json:"validatorAddr"`
 			} `json:"execution"`
 		} `json:"transactions"`
 	} `json:"data"`
@@ -229,7 +255,7 @@ func waitForChildTransaction(ctx context.Context, endpoint, transactionID string
 		"where": map[string]interface{}{
 			"id_in": []string{transactionID},
 		},
-		"skip": 0,
+		"skip":  0,
 		"first": 1000,
 	}
 
@@ -323,4 +349,8 @@ func makeGraphQLRequest(ctx context.Context, endpoint string, req GraphQLRequest
 	}
 
 	return &graphqlResp, nil
+}
+
+func WaitForClaim(ctx context.Context, depositTxHash, trader string) ([]byte, error) {
+	return nil, nil
 }

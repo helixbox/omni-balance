@@ -68,15 +68,15 @@ func buildL1ToL2Tx(ctx context.Context, args provider.SwapParams, client simulat
 		receiver = L2_GNOSIS_USDC_TRANSMUTER
 		argType, err := abi.NewType("address", "", nil)
 		if err != nil {
-			return nil, erros.Wrap(err, "new abi type")
+			return nil, errors.Wrap(err, "new abi type")
 		}
-		data = err := abi.Arguments{{Type: argType}}.Pack(realWallet)
+		data, err = abi.Arguments{{Type: argType}}.Pack(realWallet)
 		if err != nil {
 			return nil, errors.Wrap(err, "pack data")
 		}
 	}
 
-	data, err := Deposit(ctx, tokenConfig.l1Address, receiver, amount, data)
+	data, err = Deposit(ctx, tokenConfig.l1Address, receiver, amount, data)
 	if err != nil {
 		return nil, errors.Wrap(err, "deposit tx request")
 	}

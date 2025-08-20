@@ -2,14 +2,12 @@ package gnosis
 
 import (
 	"context"
-	"encoding/json"
 	"math/big"
 	"strings"
 
 	"omni-balance/utils/chains"
 	"omni-balance/utils/configs"
 	"omni-balance/utils/constant"
-	base_portal "omni-balance/utils/enclave/router/base/portal"
 	log "omni-balance/utils/logging"
 	"omni-balance/utils/provider"
 
@@ -32,8 +30,8 @@ var (
 		},
 	}
 	gnosisChainId int64 = 100
-	l2Router            = common.HexToAddress("0x4200000000000000000000000000000000000010")
-	portal              = common.HexToAddress("0x49048044D57e1C92A77f79988d21Fa8fAF74E97e")
+	l2Router            = common.HexToAddress("0xf6A78083ca3e2a662D6dd1703c939c8aCE2e268d")
+	l1Claimer           = common.HexToAddress("0x9a873656c19Efecbfb4f9FAb5B7acdeAb466a0B0")
 )
 
 type Gnosis2Ethereum struct {
@@ -51,7 +49,7 @@ func (b *Gnosis2Ethereum) CheckToken(_ context.Context, tokenName, tokenInChainN
 	_ decimal.Decimal,
 ) (bool, error) {
 	if strings.ToLower(tokenInChainName) == constant.Gnosis && strings.ToLower(tokenOutChainName) == constant.Ethereum {
-		if base2ethereum[strings.ToUpper(tokenName)] != (tokenConfig{}) {
+		if gnosis2ethereum[strings.ToUpper(tokenName)] != (tokenConfig{}) {
 			return true, nil
 		}
 	}
@@ -90,18 +88,18 @@ func buildL2ToL1Tx(ctx context.Context, args provider.SwapParams, client simulat
 	var (
 		wallet      = args.Sender
 		realWallet  = wallet.GetAddress(true)
-		tokenConfig = base2ethereum[strings.ToUpper(args.SourceToken)]
+		tokenConfig = gnosis2ethereum[strings.ToUpper(args.SourceToken)]
 	)
 	amount := decimal.NewFromBigInt(chains.EthToWei(args.Amount, decimals), 0)
 
-	data, err := Withdraw(ctx, tokenConfig.l2Address, realWallet, amount)
+	data, err := Withdraw(ctx, l2Router, amount, realWallet.Bytes())
 	if err != nil {
 		return nil, errors.Wrap(err, "withdraw tx request")
 	}
 
 	return &types.DynamicFeeTx{
-		ChainID: big.NewInt(baseChainId),
-		To:      &l2Router,
+		ChainID: big.NewInt(gnosisChainId),
+		To:      &tokenConfig.l2Address,
 		Value:   big.NewInt(0),
 		Data:    data,
 	}, nil
@@ -219,33 +217,33 @@ func (b *Gnosis2Ethereum) Swap(ctx context.Context, args provider.SwapParams) (r
 		recordFn(sh.SetActions(state2).SetStatus(provider.TxStatusSuccess).Out())
 	}
 
-	if actionNumber <= 3 && !isActionSuccess {
-		recordFn(sh.SetActions(state3).SetStatus(provider.TxStatusPending).Out())
-		log.Debugf("waiting for prove, tx: %s", sr.Tx)
-		proveTx, err := b.BuildProveTx(ctx, sr.Tx, args.Sender.GetAddress(true).Hex())
-		if err != nil {
-			recordFn(sh.SetActions(state3).SetStatus(provider.TxStatusFailed).Out(), err)
-			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait claim tx")
-		}
-		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeBase2EthProve)
-		txHash, err := wallet.SendTransaction(ctx, proveTx, ethClient)
-		if err != nil {
-			recordFn(sh.SetActions(state3).SetStatus(provider.TxStatusFailed).Out())
-			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "send tx")
-		}
-		recordFn(sh.SetActions(state3).SetStatus(provider.TxStatusSuccess).Out())
-		sh = sh.SetTx(txHash.Hex())
-	}
-
-	if actionNumber <= 4 && !isActionSuccess {
-		recordFn(sh.SetActions(state4).SetStatus(provider.TxStatusPending).Out())
-		err = wallet.WaitTransaction(ctx, common.HexToHash(sh.Tx), ethClient)
-		if err != nil {
-			recordFn(sh.SetActions(state4).SetStatus(provider.TxStatusPending).Out(), err)
-			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait for tx")
-		}
-		recordFn(sh.SetActions(state4).SetStatus(provider.TxStatusSuccess).Out())
-	}
+	// if actionNumber <= 3 && !isActionSuccess {
+	// 	recordFn(sh.SetActions(state3).SetStatus(provider.TxStatusPending).Out())
+	// 	log.Debugf("waiting for prove, tx: %s", sr.Tx)
+	// 	proveTx, err := b.BuildProveTx(ctx, sr.Tx, args.Sender.GetAddress(true).Hex())
+	// 	if err != nil {
+	// 		recordFn(sh.SetActions(state3).SetStatus(provider.TxStatusFailed).Out(), err)
+	// 		return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait claim tx")
+	// 	}
+	// 	ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeBase2EthProve)
+	// 	txHash, err := wallet.SendTransaction(ctx, proveTx, ethClient)
+	// 	if err != nil {
+	// 		recordFn(sh.SetActions(state3).SetStatus(provider.TxStatusFailed).Out())
+	// 		return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "send tx")
+	// 	}
+	// 	recordFn(sh.SetActions(state3).SetStatus(provider.TxStatusSuccess).Out())
+	// 	sh = sh.SetTx(txHash.Hex())
+	// }
+	//
+	// if actionNumber <= 4 && !isActionSuccess {
+	// 	recordFn(sh.SetActions(state4).SetStatus(provider.TxStatusPending).Out())
+	// 	err = wallet.WaitTransaction(ctx, common.HexToHash(sh.Tx), ethClient)
+	// 	if err != nil {
+	// 		recordFn(sh.SetActions(state4).SetStatus(provider.TxStatusPending).Out(), err)
+	// 		return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait for tx")
+	// 	}
+	// 	recordFn(sh.SetActions(state4).SetStatus(provider.TxStatusSuccess).Out())
+	// }
 
 	if actionNumber <= 5 && !isActionSuccess {
 		recordFn(sh.SetActions(state5).SetStatus(provider.TxStatusPending).Out())
@@ -273,20 +271,20 @@ func (b *Gnosis2Ethereum) Swap(ctx context.Context, args provider.SwapParams) (r
 	return sr.SetStatus(provider.TxStatusSuccess).SetCurrentChain(args.TargetChain).Out(), nil
 }
 
-func (b *Gnosis2Ethereum) BuildProveTx(ctx context.Context, txHash, trader string) (*types.DynamicFeeTx, error) {
-	proveData, err := WaitForProve(ctx, txHash, trader)
-	if err != nil {
-		return nil, errors.Wrap(err, "prove tx data")
-	}
-	log.Debugf("prove tx data: %s", proveData)
-
-	return &types.DynamicFeeTx{
-		ChainID: big.NewInt(EthereumChianId),
-		To:      &portal,
-		Value:   big.NewInt(0),
-		Data:    common.Hex2Bytes(strings.TrimPrefix(proveData, "0x")),
-	}, nil
-}
+// func (b *Gnosis2Ethereum) BuildProveTx(ctx context.Context, txHash, trader string) (*types.DynamicFeeTx, error) {
+// 	proveData, err := WaitForProve(ctx, txHash, trader)
+// 	if err != nil {
+// 		return nil, errors.Wrap(err, "prove tx data")
+// 	}
+// 	log.Debugf("prove tx data: %s", proveData)
+//
+// 	return &types.DynamicFeeTx{
+// 		ChainID: big.NewInt(EthereumChianId),
+// 		To:      &portal,
+// 		Value:   big.NewInt(0),
+// 		Data:    common.Hex2Bytes(strings.TrimPrefix(proveData, "0x")),
+// 	}, nil
+// }
 
 func (b *Gnosis2Ethereum) BuildClaimTx(ctx context.Context, txHash, trader string) (*types.DynamicFeeTx, error) {
 	claimData, err := WaitForClaim(ctx, txHash, trader)
@@ -295,33 +293,11 @@ func (b *Gnosis2Ethereum) BuildClaimTx(ctx context.Context, txHash, trader strin
 	}
 	log.Debugf("claim tx data: %s", claimData)
 
-	portalAbi, err := base_portal.BasePortalMetaData.ParseABI()
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	input := common.Hex2Bytes(strings.TrimPrefix(claimData, "0x"))
-	if len(input) < 4 {
-		return nil, errors.New("data too short")
-	}
-	args, err := portalAbi.Methods["finalizeWithdrawalTransactionExternalProof"].Inputs.Unpack(input[4:])
-	if err != nil {
-		return nil, errors.Wrap(err, "unpack")
-	}
-	if len(args) != 2 {
-		return nil, errors.New("invalid number of args")
-	}
-	c, _ := json.Marshal(args[0])
-	var txw base_portal.TypesWithdrawalTransaction
-	json.Unmarshal(c, &txw)
-
-	data := base_portal.NewBasePortal().PackFinalizeWithdrawalTransaction(txw)
-
 	return &types.DynamicFeeTx{
 		ChainID: big.NewInt(EthereumChianId),
-		To:      &portal,
+		To:      &l1Claimer,
 		Value:   big.NewInt(0),
-		Data:    data,
+		Data:    claimData,
 	}, nil
 }
 
