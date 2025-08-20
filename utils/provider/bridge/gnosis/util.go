@@ -39,7 +39,7 @@ func Deposit(ctx context.Context, token, receiver common.Address, value decimal.
 		return nil, errors.WithStack(err)
 	}
 
-	return routerAbi.Pack("relayTokensAndCall", token, receiver, value, data)
+	return routerAbi.Pack("relayTokensAndCall", token, receiver, value.BigInt(), data)
 }
 
 func Withdraw(ctx context.Context, to common.Address, value decimal.Decimal, data []byte) ([]byte, error) {
@@ -47,7 +47,7 @@ func Withdraw(ctx context.Context, to common.Address, value decimal.Decimal, dat
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-	return erc1363Abi.Pack("transferAndCall", to, value, data)
+	return erc1363Abi.Pack("transferAndCall", to, value.BigInt(), data)
 }
 
 // 第一步请求 API ，通过 depositTxHash == transactionHash 获取对应的 id
