@@ -197,7 +197,7 @@ func (b *Gnosis2Ethereum) Swap(ctx context.Context, args provider.SwapParams) (r
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "build tx")
 		}
 
-		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeBase2EthBridge)
+		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeGnosisWithdraw)
 		txHash, err := wallet.SendTransaction(ctx, tx, baseClient)
 		if err != nil {
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "send tx")
@@ -249,7 +249,7 @@ func (b *Gnosis2Ethereum) Swap(ctx context.Context, args provider.SwapParams) (r
 		recordFn(sh.SetActions(state5).SetStatus(provider.TxStatusPending).Out())
 		log.Debugf("waiting for claim, tx: %s", sr.Tx)
 		claimTx, err := b.BuildClaimTx(ctx, sr.Tx, args.Sender.GetAddress(true).Hex())
-		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeBase2EthClaim)
+		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeGnosisClaim)
 		txHash, err := wallet.SendTransaction(ctx, claimTx, ethClient)
 		if err != nil {
 			recordFn(sh.SetActions(state5).SetStatus(provider.TxStatusFailed).Out())

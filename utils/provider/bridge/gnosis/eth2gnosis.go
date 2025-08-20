@@ -198,7 +198,7 @@ func (b *Ethereum2Gnosis) Swap(ctx context.Context, args provider.SwapParams) (r
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "build tx")
 		}
 
-		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeEth2BaseBridge)
+		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeGnosisDeposit)
 		log.Debugf("waiting for send deposit tx.....")
 		txHash, err := wallet.SendTransaction(ctx, tx, ethClient)
 		if err != nil {
@@ -242,7 +242,7 @@ func (b *Ethereum2Gnosis) Swap(ctx context.Context, args provider.SwapParams) (r
 
 func (b *Ethereum2Gnosis) WaitForBridgeSuccess(ctx context.Context, txHash, trader string) (string, error) {
 	const maxRetries = 10
-	const retryInterval = 2 * time.Minute
+	const retryInterval = 10 * time.Minute
 
 	var receiveTx string
 	var err error
