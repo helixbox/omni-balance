@@ -27,13 +27,13 @@ type GnosisWithdraw struct {
 }
 
 func (c *Client) SignGnosisWithdraw(tx *types.Transaction, chainID int64) (*types.Transaction, error) {
-	token, to, value, data, err := getGnosisWithdrawInfo(tx.Data())
+	to, value, data, err := getGnosisWithdrawInfo(tx.Data())
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
 
 	withdraw := GnosisWithdraw{
-		Token: token,
+		Token: *tx.To(),
 		To:    to,
 		Value: value.String(),
 		Data:  common.Bytes2Hex(data),
@@ -52,24 +52,24 @@ func (c *Client) SignGnosisWithdraw(tx *types.Transaction, chainID int64) (*type
 	return c.signRequest(req, tx, chainID)
 }
 
-func getGnosisWithdrawInfo(input []byte) (token, to common.Address, value *big.Int, data []byte, err error) {
+func getGnosisWithdrawInfo(input []byte) (to common.Address, value *big.Int, data []byte, err error) {
 	if len(input) < 4 {
-		return common.Address{}, common.Address{}, nil, nil, errors.New("data too short")
+		return common.Address{}, nil, nil, errors.New("data too short")
 	}
 
 	erc1363Abi, err := erc20.Erc1363MetaData.GetAbi()
 	if err != nil {
-		return common.Address{}, common.Address{}, nil, nil, errors.WithStack(err)
+		return common.Address{}, nil, nil, errors.WithStack(err)
 	}
 
-	args, err := erc1363Abi.Methods["transferAndCall"].Inputs.Unpack(input[4:])
+	args, err := erc1363Abi.Methods["transferAndCall0"].Inputs.Unpack(input[4:])
 	if err != nil {
-		return common.Address{}, common.Address{}, nil, nil, errors.WithStack(err)
+		return common.Address{}, nil, nil, errors.WithStack(err)
 	}
 
-	if len(args) != 4 {
-		return common.Address{}, common.Address{}, nil, nil, errors.New("invalid number of args")
+	if len(args) != 3 {
+		return common.Address{}, nil, nil, errors.New("invalid number of args")
 	}
 
-	return args[0].(common.Address), args[1].(common.Address), args[2].(*big.Int), args[3].([]byte), nil
+	return args[0].(common.Address), args[1].(*big.Int), args[2].([]byte), nil
 }

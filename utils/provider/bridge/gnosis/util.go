@@ -48,7 +48,7 @@ func Withdraw(ctx context.Context, to common.Address, value decimal.Decimal, dat
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-	return erc1363Abi.Pack("transferAndCall", to, value.BigInt(), data)
+	return erc1363Abi.Pack("transferAndCall0", to, value.BigInt(), data)
 }
 
 // 第一步请求 API ，通过 depositTxHash == transactionHash 获取对应的 id
@@ -284,8 +284,6 @@ func waitForChildTransaction(ctx context.Context, endpoint, transactionID string
 			}
 
 			resp, err := makeGraphQLRequest(ctx, endpoint, req, customCookies)
-			fmt.Println("resp:", resp)
-			fmt.Println("err:", err)
 			if err != nil {
 				continue // 继续等待
 			}
