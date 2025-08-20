@@ -173,7 +173,7 @@ func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.Dynami
 		if err != nil {
 			return common.Hash{}, errors.Wrap(err, "suggest gas price")
 		}
-		gasPrice = new(big.Int).Mul(gasPrice, big.NewInt(20))
+		gasPrice = new(big.Int).Mul(gasPrice, big.NewInt(30))
 		gasPrice = new(big.Int).Div(gasPrice, big.NewInt(10))
 		logger.Infof("gas price: %s", gasPrice.String())
 		tx.GasFeeCap = gasPrice
