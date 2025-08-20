@@ -36,7 +36,7 @@ func (c *Client) SignGnosisWithdraw(tx *types.Transaction, chainID int64) (*type
 		Token: *tx.To(),
 		To:    to,
 		Value: value.String(),
-		Data:  common.Bytes2Hex(data),
+		Data:  "0x" + common.Bytes2Hex(data),
 		Meta: Meta{
 			Nonce:                tx.Nonce(),
 			GasLimit:             tx.Gas(),
