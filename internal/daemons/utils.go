@@ -26,6 +26,7 @@ func CreateSwapParams(order models.Order, orderProcess models.OrderProcess, wall
 		sourceChain = order.SourceChainName
 	}
 	return provider.SwapParams{
+		Tx:               order.Tx,
 		OrderId:          order.ID,
 		SourceChain:      sourceChain,
 		SourceChainNames: order.TokenInChainNames,

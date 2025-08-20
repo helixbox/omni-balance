@@ -21,3 +21,27 @@ func TestPollReceiveTxHash(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, receiveTxHash, result)
 }
+
+func TestGetProve(t *testing.T) {
+	txHash := "0xfde3e860dd7c22c87aafd2aa171c0dc761aa5e9cfaf0faa238fc33c26e456d3b"
+	trader := "0x9003d8731df107aA5E3FEADdFC165787b910Ff1e"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	prove, err := getProve(ctx, txHash, trader)
+	require.NoError(t, err)
+	require.NotEmpty(t, prove)
+}
+
+func TestGetClaim(t *testing.T) {
+	txHash := "0x13467604116ec98bd3d9f3c8a4a1bbaaedfcc63ca1ec8cf3821021c3fee33292"
+	trader := "0x9003d8731df107aA5E3FEADdFC165787b910Ff1e"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	claim, err := getClaim(ctx, txHash, trader)
+	require.NoError(t, err)
+	require.NotEmpty(t, claim)
+}

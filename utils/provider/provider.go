@@ -106,6 +106,7 @@ type BalanceParams struct {
 }
 
 type SwapParams struct {
+	Tx               string                              `json:"tx"`
 	Order            datatypes.JSON                      `json:"order"`
 	OrderId          uint                                `json:"order_id"`
 	SourceToken      string                              `json:"source_token"`
