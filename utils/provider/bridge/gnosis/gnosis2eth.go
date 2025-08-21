@@ -60,6 +60,10 @@ func (b *Gnosis2Ethereum) CheckToken(_ context.Context, tokenName, tokenInChainN
 }
 
 func (b *Gnosis2Ethereum) GetCost(ctx context.Context, args provider.SwapParams) (provider.TokenInCosts, error) {
+	if strings.ToUpper(args.SourceToken) == "USDC" {
+		return nil, errors.New("do not support USDC")
+	}
+
 	chain := constant.Gnosis
 	chainConfig := b.config.GetChainConfig(chain)
 	client, err := chains.NewTryClient(ctx, chainConfig.RpcEndpoints)

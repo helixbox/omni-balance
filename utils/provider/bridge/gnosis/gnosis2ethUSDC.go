@@ -48,6 +48,10 @@ func (b *Gnosis2EthereumUSDC) CheckToken(_ context.Context, tokenName, tokenInCh
 }
 
 func (b *Gnosis2EthereumUSDC) GetCost(ctx context.Context, args provider.SwapParams) (provider.TokenInCosts, error) {
+	if strings.ToUpper(args.SourceToken) != "USDC" {
+		return nil, errors.New("only support USDC")
+	}
+
 	chain := constant.Gnosis
 	chainConfig := b.config.GetChainConfig(chain)
 	client, err := chains.NewTryClient(ctx, chainConfig.RpcEndpoints)
@@ -78,6 +82,12 @@ func (b *Gnosis2EthereumUSDC) GetCost(ctx context.Context, args provider.SwapPar
 
 func buildUsdcTransmuterTx(ctx context.Context, args provider.SwapParams, client simulated.Client, decimals int32) (*types.DynamicFeeTx, error) {
 	amount := decimal.NewFromBigInt(chains.EthToWei(args.Amount, decimals), 0)
+
+	err := Approve(ctx, gnosisChainId, l2Address, l2Transmuter, args.Sender, amount, client)
+	if err != nil {
+		return nil, errors.Wrap(err, "approve")
+	}
+
 	data, err := TransmuterWithdraw(ctx, amount)
 	if err != nil {
 		return nil, errors.Wrap(err, "transmuter tx request")
@@ -224,14 +234,13 @@ func (b *Gnosis2EthereumUSDC) Swap(ctx context.Context, args provider.SwapParams
 
 	if actionNumber <= 3 && !isActionSuccess {
 		recordFn(sh.SetActions(state3).SetStatus(provider.TxStatusPending).Out())
-		log.Debugf("waiting for prove, tx: %s", sr.Tx)
 		proveTx, err := buildL2ToL1TxUSDC(ctx, args, baseClient, decimals)
 		if err != nil {
 			recordFn(sh.SetActions(state3).SetStatus(provider.TxStatusFailed).Out(), err)
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait claim tx")
 		}
 		ctx = context.WithValue(ctx, constant.SignTxKeyInCtx, chains.SignTxTypeGnosisWithdraw)
-		txHash, err := wallet.SendTransaction(ctx, proveTx, ethClient)
+		txHash, err := wallet.SendTransaction(ctx, proveTx, baseClient)
 		if err != nil {
 			recordFn(sh.SetActions(state3).SetStatus(provider.TxStatusFailed).Out())
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "send tx")
@@ -243,7 +252,7 @@ func (b *Gnosis2EthereumUSDC) Swap(ctx context.Context, args provider.SwapParams
 	//
 	if actionNumber <= 4 && !isActionSuccess {
 		recordFn(sh.SetActions(state4).SetStatus(provider.TxStatusPending).Out())
-		err = wallet.WaitTransaction(ctx, common.HexToHash(sh.Tx), ethClient)
+		err = wallet.WaitTransaction(ctx, common.HexToHash(sh.Tx), baseClient)
 		if err != nil {
 			recordFn(sh.SetActions(state4).SetStatus(provider.TxStatusPending).Out(), err)
 			return sr.SetStatus(provider.TxStatusFailed).SetError(err).Out(), errors.Wrap(err, "wait for tx")
@@ -282,7 +291,6 @@ func (b *Gnosis2EthereumUSDC) BuildClaimTx(ctx context.Context, txHash, trader s
 	if err != nil {
 		return nil, errors.Wrap(err, "claim tx data")
 	}
-	log.Debugf("claim tx data: %s", claimData)
 
 	return &types.DynamicFeeTx{
 		ChainID: big.NewInt(EthereumChianId),
