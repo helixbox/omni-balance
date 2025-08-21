@@ -16,6 +16,7 @@ import (
 	"omni-balance/utils/chains"
 	gnosis_claim "omni-balance/utils/enclave/router/gnosis/claim"
 	gnosis_deposit "omni-balance/utils/enclave/router/gnosis/deposit"
+	gnosis_transmuter "omni-balance/utils/enclave/router/gnosis/transmuter"
 	"omni-balance/utils/erc20"
 	"omni-balance/utils/wallets"
 
@@ -35,6 +36,15 @@ func Approve(ctx context.Context, chainId int64, tokenAddress, spender common.Ad
 		AmountWei:       amount,
 		Client:          client,
 	})
+}
+
+func TransmuterWithdraw(ctx context.Context, value decimal.Decimal) ([]byte, error) {
+	routerAbi, err := gnosis_transmuter.GnosisTransmuterMetaData.ParseABI()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return routerAbi.Pack("withdraw", value.BigInt())
 }
 
 func Deposit(ctx context.Context, token, receiver common.Address, value decimal.Decimal, data []byte) ([]byte, error) {
@@ -782,7 +792,7 @@ func WaitForClaim(ctx context.Context, withdrawTx, trader string) ([]byte, error
 		return data, nil
 	}
 
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
 
 	for {

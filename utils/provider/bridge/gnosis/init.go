@@ -10,6 +10,7 @@ import (
 func init() {
 	provider.Register(configs.Bridge, NewL1ToL2)
 	provider.Register(configs.Bridge, NewL2ToL1)
+	provider.Register(configs.Bridge, NewL2ToL1USDC)
 }
 
 const (
