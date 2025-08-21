@@ -393,7 +393,7 @@ func generateOrderByWalletMode(ctx context.Context, order models.Order, conf con
 		if total.Sub(order.Amount).LessThan(threshold) {
 			continue
 		}
-		log.Debugf("wallet %s token %s on chain %s balance is %s, amount is %s, balance - amount >= threshold, can rebalance from this chain", order.Wallet, token.Name, v, total, order.Amount)
+		log.Infof("wallet %s token %s on chain %s balance is %s, amount is %s, balance - amount >= threshold, can rebalance from this chain", order.Wallet, token.Name, v, total, order.Amount)
 		sourceChains = append(sourceChains, v)
 	}
 	if len(sourceChains) != 0 {
@@ -402,7 +402,7 @@ func generateOrderByWalletMode(ctx context.Context, order models.Order, conf con
 		newOrder.TokenInName = token.Name
 		newOrder.TokenInChainNames = sourceChains
 		order = *newOrder
-		log.Debugf("order mode is 'balance', use %s on %+v as token in, token out is %s on %s", order.TokenInName, order.TokenInChainNames, order.TokenOutName, order.TargetChainName)
+		log.Infof("order mode is 'balance', use %s on %+v as token in, token out is %s on %s", order.TokenInName, order.TokenInChainNames, order.TokenOutName, order.TargetChainName)
 	}
 	return order, nil
 }

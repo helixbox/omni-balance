@@ -24,6 +24,7 @@ import (
 	_ "omni-balance/utils/provider/bridge/base"
 	_ "omni-balance/utils/provider/bridge/bungee"
 	_ "omni-balance/utils/provider/bridge/darwinia"
+	_ "omni-balance/utils/provider/bridge/gnosis"
 	_ "omni-balance/utils/provider/bridge/helix_liquidity_claim"
 	_ "omni-balance/utils/provider/bridge/li"
 	_ "omni-balance/utils/provider/bridge/okx"

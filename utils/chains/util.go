@@ -99,15 +99,19 @@ func GetTokenBalance(ctx context.Context, client simulated.Client, tokenAddress,
 type SignTxType string
 
 const (
-	SignTxTypeApprove        SignTxType = "approve"
-	SignTxTypeTransfer       SignTxType = "transfer"
-	SignTxTypeEth2ArbBridge  SignTxType = "eth-arb-bridge"
-	SignTxTypeArb2EthBridge  SignTxType = "arb-eth-bridge"
-	SignTxTypeArb2EthClaim   SignTxType = "arb-eth-claim"
-	SignTxTypeEth2BaseBridge SignTxType = "eth-base-bridge"
-	SignTxTypeBase2EthBridge SignTxType = "base-eth-bridge"
-	SignTxTypeBase2EthProve  SignTxType = "base-eth-prove"
-	SignTxTypeBase2EthClaim  SignTxType = "base-eth-claim"
+	SignTxTypeApprove          SignTxType = "approve"
+	SignTxTypeTransfer         SignTxType = "transfer"
+	SignTxTypeEth2ArbBridge    SignTxType = "eth-arb-bridge"
+	SignTxTypeArb2EthBridge    SignTxType = "arb-eth-bridge"
+	SignTxTypeArb2EthClaim     SignTxType = "arb-eth-claim"
+	SignTxTypeEth2BaseBridge   SignTxType = "eth-base-bridge"
+	SignTxTypeBase2EthBridge   SignTxType = "base-eth-bridge"
+	SignTxTypeBase2EthProve    SignTxType = "base-eth-prove"
+	SignTxTypeBase2EthClaim    SignTxType = "base-eth-claim"
+	SignTxTypeGnosisDeposit    SignTxType = "gnosis-deposit"
+	SignTxTypeGnosisWithdraw   SignTxType = "gnosis-withdraw"
+	SignTxTypeGnosisClaim      SignTxType = "gnosis-claim"
+	SignTxTypeGnosisTransmuter SignTxType = "gnosis-transmuter"
 )
 
 func SignTx(tx *types.Transaction, privateKey string, chainId int64, signTxType SignTxType) (*types.Transaction, error) {
@@ -141,6 +145,14 @@ func SignTx(tx *types.Transaction, privateKey string, chainId int64, signTxType 
 		return client.SignBaseProve(tx, chainId)
 	case SignTxTypeBase2EthClaim:
 		return client.SignBaseClaim(tx, chainId)
+	case SignTxTypeGnosisDeposit:
+		return client.SignGnosisDeposit(tx, chainId)
+	case SignTxTypeGnosisWithdraw:
+		return client.SignGnosisWithdraw(tx, chainId)
+	case SignTxTypeGnosisClaim:
+		return client.SignGnosisClaim(tx, chainId)
+	case SignTxTypeGnosisTransmuter:
+		return client.SignGnosisTransmuter(tx, chainId)
 	default:
 		return nil, errors.New("sign tx type not support")
 	}
