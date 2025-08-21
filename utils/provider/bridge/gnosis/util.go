@@ -527,7 +527,16 @@ func getEncodedDataFromReceipt(ctx context.Context, txHash, topic string) ([]byt
 		return nil, errors.Wrap(err, "failed to parse encoded data from receipt")
 	}
 
-	return encodedData, nil
+	argType, err := abi.NewType("bytes", "", nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "new abi type")
+	}
+	message, err := abi.Arguments{{Type: argType}}.Unpack(encodedData)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to unpack signatures")
+	}
+
+	return message[0].([]byte), nil
 }
 
 // getSignaturesFromContract 调用 AMBBridgeHelper 合约的 getSignatures 方法
@@ -536,7 +545,6 @@ func getSignaturesFromContract(ctx context.Context, contractAddress string, mess
 	// 由于没有直接的 ethclient，我们需要通过 HTTP RPC 调用来实现
 
 	data := "0x" + common.Bytes2Hex(packGetSignaturesCall(message))
-	fmt.Println("data: ", data)
 
 	// 构建 RPC 请求调用合约的 getSignatures 方法
 	rpcReq := map[string]interface{}{
@@ -578,12 +586,34 @@ func packGetSignaturesCall(message []byte) []byte {
 	// 格式：[4字节方法ID][32字节偏移量][32字节长度][实际数据]
 
 	// 方法 ID
-	methodID := []byte{0x1d, 0x26, 0x35, 0x3a}
+	methodID := []byte{0x6b, 0x45, 0xb4, 0xe3}
+
+	// 偏移量（指向数据开始位置，固定为 0x20）
+	offset := make([]byte, 32)
+	offset[31] = 0x20
+
+	// 数据长度
+	length := make([]byte, 32)
+	length[31] = byte(len(message))
+
+	// 数据（需要填充到32字节的倍数）
+	paddedData := make([]byte, 0)
+	paddedData = append(paddedData, length...)
+	paddedData = append(paddedData, message...)
+
+	// 如果数据长度不是32的倍数，需要填充
+	if len(paddedData)%32 != 0 {
+		padding := 32 - (len(paddedData) % 32)
+		for i := 0; i < padding; i++ {
+			paddedData = append(paddedData, 0)
+		}
+	}
 
 	// 组合所有部分
 	result := make([]byte, 0)
 	result = append(result, methodID...)
-	result = append(result, message...)
+	result = append(result, offset...)
+	result = append(result, paddedData...)
 
 	return result
 }
@@ -625,24 +655,15 @@ func parseSignaturesFromResponse(response map[string]interface{}) ([]byte, error
 }
 
 // packSafeExecuteSignaturesWithAutoGasLimit 使用 gnosis_claim 包打包调用数据
-func packSafeExecuteSignaturesWithAutoGasLimit(messageBytes, signatures []byte) ([]byte, error) {
+func packSafeExecuteSignaturesWithAutoGasLimit(message, signatures []byte) ([]byte, error) {
 	// 导入 gnosis_claim 包
 	gnosisClaimAbi, err := gnosis_claim.GnosisClaimMetaData.ParseABI()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get gnosis claim ABI")
 	}
 
-	argType, err := abi.NewType("bytes", "", nil)
-	if err != nil {
-		return nil, errors.Wrap(err, "new abi type")
-	}
-	message, err := abi.Arguments{{Type: argType}}.Unpack(messageBytes)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to unpack signatures")
-	}
-
 	// 打包 safeExecuteSignaturesWithAutoGasLimit 调用
-	packedData, err := gnosisClaimAbi.Pack("safeExecuteSignaturesWithAutoGasLimit", message[0].([]byte), signatures)
+	packedData, err := gnosisClaimAbi.Pack("safeExecuteSignaturesWithAutoGasLimit", message, signatures)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to pack safeExecuteSignaturesWithAutoGasLimit")
 	}
