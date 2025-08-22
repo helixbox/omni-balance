@@ -141,7 +141,7 @@ func WaitForChildTransactionReceiptWithCookie(ctx context.Context, depositTxHash
 		graphqlEndpoint1 = "https://gateway-arbitrum.network.thegraph.com/api/a077e395ce795c9f990504ec1ec6c8ba/subgraphs/id/9W7Ye5xFfefNYDxXD4StqAuj7TU8eLq5PLmuPUnhFbeQ"
 		graphqlEndpoint2 = "https://gateway-arbitrum.network.thegraph.com/api/a077e395ce795c9f990504ec1ec6c8ba/subgraphs/id/2ths6FTZhCBggnyakh7PL5KH91zjRv8xPNfzaCRKogJ"
 		// 查询间隔
-		pollInterval = 10 * time.Second
+		pollInterval = 10 * time.Minute
 		// 最大等待时间
 		maxWaitTime = 10 * time.Minute
 	)
