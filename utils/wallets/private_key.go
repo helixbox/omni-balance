@@ -168,6 +168,15 @@ func (p *PrivateKeyWallet) getPrivateKey() string {
 func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.DynamicFeeTx,
 	client simulated.Client,
 ) (common.Hash, error) {
+	chainId, err := client.ChainID(ctx)
+	if err != nil {
+		return common.Hash{}, errors.Wrap(err, "get chain id")
+	}
+
+	key := locks.LockKey(p.GetAddress(true).Hex(), chainId.String())
+	locks.LockWithKey(ctx, key)
+	defer locks.UnlockWithKey(ctx, key)
+
 	if tx.GasFeeCap == nil {
 		gasPrice, err := client.SuggestGasPrice(ctx)
 		if err != nil {
@@ -205,11 +214,6 @@ func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.Dynami
 		tx.Nonce = nonce
 	}
 
-	chainId, err := client.ChainID(ctx)
-	if err != nil {
-		return common.Hash{}, errors.Wrap(err, "get chain id")
-	}
-
 	txData := types.NewTx(tx)
 
 	var signTxType chains.SignTxType = chains.SignTxTypeTransfer
@@ -220,9 +224,6 @@ func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.Dynami
 	if err != nil {
 		return common.Hash{}, errors.Wrap(err, "sign tx")
 	}
-	key := locks.LockKey(p.GetAddress(true).Hex(), chainId.String())
-	locks.LockWithKey(ctx, key)
-	defer locks.UnlockWithKey(ctx, key)
 	return txData.Hash(), client.SendTransaction(ctx, txData)
 }
 
