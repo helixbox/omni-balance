@@ -168,7 +168,7 @@ func SignMsg(msg []byte, privateKey string) (sig []byte, err error) {
 }
 
 func WaitForTx(ctx context.Context, client simulated.Client, txHash common.Hash) error {
-	t := time.NewTicker(time.Second)
+	t := time.NewTicker(10 * time.Second)
 	defer t.Stop()
 	for {
 		select {

@@ -180,12 +180,7 @@ func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.Dynami
 	}
 
 	if tx.GasTipCap == nil {
-		tip, err := client.SuggestGasTipCap(ctx)
-		if err != nil {
-			return common.Hash{}, errors.Wrap(err, "suggest gas tip")
-		}
-		tip = new(big.Int).Mul(tip, big.NewInt(20))
-		tip = new(big.Int).Div(tip, big.NewInt(10))
+		tip := new(big.Int).Div(tx.GasTipCap, big.NewInt(50))
 		logger.Infof("gas tip: %s", tip.String())
 		tx.GasTipCap = tip
 	}
