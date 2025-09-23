@@ -158,7 +158,7 @@ func (b *Gnosis2Ethereum) Swap(ctx context.Context, args provider.SwapParams) (r
 		SetProviderName(b.Name()).
 		SetProviderType(b.Type()).
 		SetCurrentChain(args.SourceChain).
-		SetTx(args.LastHistory.Tx)
+		SetTx(args.Tx)
 
 	sh := &provider.SwapHistory{
 		ProviderName: b.Name(),
