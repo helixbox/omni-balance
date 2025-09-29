@@ -74,7 +74,7 @@ VALUES (
     'ethereum',
     'ethereum',
     0,
-    17000,
+    14000,
     0,
     0,
     'pending',
@@ -120,7 +120,7 @@ VALUES (
     'ethereum',
     'ethereum',
     0,
-    30000,
+    60000,
     0,
     0,
     'pending',
@@ -130,7 +130,7 @@ VALUES (
     '',
     'null',
     '',
-    'b336d92d-4bc3-447f-b207-a0cfed144a5c',
+    'b336d92d-4bc3-447f-b207-a0cfed144a51',
     'queue',
     ''
 );
