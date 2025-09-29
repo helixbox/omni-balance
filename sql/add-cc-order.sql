@@ -84,7 +84,7 @@ VALUES (
     '',
     'null',
     '',
-    'b236d32d-4bc3-447f-b207-a0cfed144a52',
+    'b236d32d-4bc3-447f-b207-a0cfed144a53',
     'queue',
     ''
 );
@@ -120,7 +120,7 @@ VALUES (
     'ethereum',
     'ethereum',
     0,
-    60000,
+    50000,
     0,
     0,
     'pending',
@@ -133,4 +133,49 @@ VALUES (
     'b336d92d-4bc3-447f-b207-a0cfed144a51',
     'queue',
     ''
+);
+
+INSERT INTO orders (
+    wallet,
+    token_in_name,
+    token_out_name,
+    source_chain_name,
+    target_chain_name,
+    current_chain_name,
+    current_balance,
+    amount,
+    is_lock,
+    lock_time,
+    status,
+    provider_type,
+    provider_name,
+    provider_order_id,
+    tx,
+    "order",
+    error,
+    task_id,
+    process_type,
+    remark
+)
+VALUES (
+    '0xD1Fc331dBF956e21DA5c2D89CAA2f98c80317D33',
+    'COW',
+    'COW',
+    'ethereum',
+    'binance',
+    'binance',
+    0,
+    30000,
+    0,
+    0,
+    'pending',
+    'CEX',
+    'binance',
+    '',
+    '',
+    'null',
+    '',
+    'b336d92d-4bc3-447f-b207-a0cfed144a51',
+    'queue',
+    'chain_to_binance '
 );
