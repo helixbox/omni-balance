@@ -189,7 +189,7 @@ func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.Dynami
 	}
 
 	if tx.GasTipCap == nil {
-		tip := (big.Int).Div(tx.GasFeeCap, big.NewInt(2))
+		tip := new(big.Int).Div(tx.GasFeeCap, big.NewInt(2))
 		logger.Infof("gas tip: %s", tip.String())
 		tx.GasTipCap = tip
 	}
