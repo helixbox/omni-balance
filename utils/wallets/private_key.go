@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"math/big"
 	"strings"
 
 	"omni-balance/utils/chains"
@@ -182,14 +181,12 @@ func (p *PrivateKeyWallet) SendTransaction(ctx context.Context, tx *types.Dynami
 		if err != nil {
 			return common.Hash{}, errors.Wrap(err, "suggest gas price")
 		}
-		gasPrice = new(big.Int).Mul(gasPrice, big.NewInt(30))
-		gasPrice = new(big.Int).Div(gasPrice, big.NewInt(10))
 		logger.Infof("gas price: %s", gasPrice.String())
 		tx.GasFeeCap = gasPrice
 	}
 
 	if tx.GasTipCap == nil {
-		tip := new(big.Int).SetUint64(200000000)
+		tip := tx.GasFeeCap
 		logger.Infof("gas tip: %s", tip.String())
 		tx.GasTipCap = tip
 	}
