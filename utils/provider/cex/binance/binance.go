@@ -327,7 +327,7 @@ func (g *Binance) Swap(ctx context.Context, args provider.SwapParams) (provider.
 							continue
 						}
 						switch v.Status { // 0(0:pending, 6:credited but cannot withdraw, 7:Wrong Deposit, 8:Waiting User confirm, 1:success, 2:rejected)
-						case 1:
+						case 1, 6:
 							recordFn(sh.SetActions(TobinanceSwapAction).SetStatus(provider.TxStatusPending).Out())
 							log.Infof("deposit success, txid: %s, orderid: %s", v.TxId, v.Id)
 							break WAIT_DEPOSIT_SUCCESS
